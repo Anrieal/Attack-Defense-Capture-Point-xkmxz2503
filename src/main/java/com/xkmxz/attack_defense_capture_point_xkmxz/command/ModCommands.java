@@ -76,6 +76,16 @@ public class ModCommands {
                                         .suggests(ModCommands::suggestZones)
                                         .then(Commands.argument("pointName", StringArgumentType.word())
                                                 .executes(ModCommands::removePointFromZone))))
+                        .then(Commands.literal("setrequired")
+                                .then(Commands.argument("zoneName", StringArgumentType.word())
+                                        .suggests(ModCommands::suggestZones)
+                                        .then(Commands.argument("requiredZone", StringArgumentType.word())
+                                                .suggests(ModCommands::suggestZones)
+                                                .executes(ModCommands::setZoneRequired)))
+                                .then(Commands.argument("zoneName", StringArgumentType.word())
+                                        .suggests(ModCommands::suggestZones)
+                                        .then(Commands.literal("clear")
+                                                .executes(ctx -> setZoneRequired(ctx, null)))))
                         .then(Commands.literal("status")
                                 .executes(ModCommands::zoneStatus)))
 
@@ -117,6 +127,10 @@ public class ModCommands {
 
                 .then(Commands.literal("relationships")
                         .executes(ModCommands::showRelationships))
+
+                // ---- Editor save (server-side stub; actual save uses direct API in singleplayer or custom packet) ----
+                .then(Commands.literal("savegraph")
+                        .executes(ModCommands::saveGraph))
         );
     }
 
@@ -140,12 +154,21 @@ public class ModCommands {
         source.sendSuccess(() -> Component.translatable("command.capturepoint.help.setradius"), false);
         source.sendSuccess(() -> Component.translatable("command.capturepoint.help.setcolor"), false);
         source.sendSuccess(() -> Component.translatable("command.capturepoint.help.settoggle"), false);
+        source.sendSuccess(() -> Component.translatable("command.capturepoint.help.zone_setrequired"), false);
         source.sendSuccess(() -> Component.translatable("command.capturepoint.help.relationships"), false);
+        source.sendSuccess(() -> Component.translatable("command.capturepoint.help.savegraph"), false);
         return 1;
     }
 
     // ---- GUI ----
 
+    /**
+     * 打开据点管理 GUI。
+     * 服务端无法直接打开客户端屏幕，因此：
+     * - 单机模式下，给客户端发送提示手动使用管理器物品
+     * - 专用服务器模式下，同样提示玩家
+     * 客户端玩家可用 /capturepoint gui 命令 + 手持管理器物品打开界面。
+     */
     private static int openGui(CommandContext<CommandSourceStack> ctx) {
         var source = ctx.getSource();
         var player = source.getPlayer();
@@ -153,7 +176,23 @@ public class ModCommands {
             source.sendFailure(Component.translatable("command.capturepoint.error.player_only"));
             return 0;
         }
-        source.sendSuccess(() -> Component.translatable("command.capturepoint.gui.hint"), true);
+        // 发送操作指引（客户端收到后可在 chat 中单击补全命令）
+        source.sendSuccess(() -> Component.translatable("command.capturepoint.gui.hint"), false);
+        source.sendSuccess(() -> Component.translatable("command.capturepoint.gui.hint2"), false);
+        return 1;
+    }
+
+    // ---- savegraph (server-side stub) ----
+
+    /**
+     * 保存节点图数据到 CaptureManager。
+     * 单机模式下客户端通过直接 API 调用（CapturePointGraphScreen.saveGraph() 已处理）；
+     * 专用服务器模式下此命令作为 fallback，但完整图数据太大不适合命令行传递，
+     * 仅作为占位提示。完整支持需通过自定义网络包实现。
+     */
+    private static int saveGraph(CommandContext<CommandSourceStack> ctx) {
+        var source = ctx.getSource();
+        source.sendSuccess(() -> Component.translatable("command.capturepoint.savegraph.hint"), false);
         return 1;
     }
 
@@ -468,6 +507,40 @@ public class ModCommands {
 
         manager.removePointFromZone(zoneName, name);
         source.sendSuccess(() -> Component.translatable("command.capturepoint.removefromallzones.success", name, zoneName), true);
+        return 1;
+    }
+
+    /**
+     * 设置或清除区域的依赖区域（requiredZone）。
+     */
+    private static int setZoneRequired(CommandContext<CommandSourceStack> ctx) {
+        var source = ctx.getSource();
+        var zoneName = StringArgumentType.getString(ctx, "zoneName");
+        var requiredZone = StringArgumentType.getString(ctx, "requiredZone");
+        return setZoneRequired(ctx, zoneName, requiredZone);
+    }
+
+    private static int setZoneRequired(CommandContext<CommandSourceStack> ctx, @org.jetbrains.annotations.Nullable String requiredZone) {
+        var source = ctx.getSource();
+        var zoneName = StringArgumentType.getString(ctx, "zoneName");
+        return setZoneRequired(ctx, zoneName, requiredZone);
+    }
+
+    private static int setZoneRequired(CommandContext<CommandSourceStack> ctx, String zoneName, @org.jetbrains.annotations.Nullable String requiredZone) {
+        var source = ctx.getSource();
+        var manager = CaptureManager.get(source.getLevel());
+
+        if (!manager.getZones().containsKey(zoneName)) {
+            source.sendFailure(Component.translatable("command.capturepoint.error.zone_not_found", zoneName));
+            return 0;
+        }
+
+        manager.setZoneRequiredZone(zoneName, requiredZone);
+        if (requiredZone != null) {
+            source.sendSuccess(() -> Component.translatable("command.capturepoint.zone.setrequired.success", zoneName, requiredZone), true);
+        } else {
+            source.sendSuccess(() -> Component.translatable("command.capturepoint.zone.setrequired.clear", zoneName), true);
+        }
         return 1;
     }
 

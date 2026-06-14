@@ -19,9 +19,12 @@
   "command.capturepoint.help.setradius": "/capturepoint setradius <name> <radius> - Set point radius",
   "command.capturepoint.help.setcolor": "/capturepoint setcolor <name> <color> - Set point display color",
   "command.capturepoint.help.settoggle": "/capturepoint settoggle <name> <true/false> - Toggle range display",
+  "command.capturepoint.help.zone_setrequired": "/capturepoint zone setrequired <zone> [requiredZone|clear] - Set/clear zone dependency",
   "command.capturepoint.help.relationships": "/capturepoint relationships - Show all point/zone relationships",
+  "command.capturepoint.help.savegraph": "/capturepoint savegraph - Save graph data from editor (singleplayer: use GUI Save button)",
 
   "command.capturepoint.gui.hint": "Use the Capture Point Manager item or right-click a Capture Point Block.",
+  "command.capturepoint.gui.hint2": "In singleplayer, hold the manager item and right-click to open the Graph Editor.",
 
   "command.capturepoint.create.success": "Created capture point '%s' at [%d, %d, %d]",
   "command.capturepoint.remove.success": "Removed capture point '%s'",
@@ -61,6 +64,10 @@
   "command.capturepoint.zone.addpoint.success": "Added '%s' to zone '%s'",
   "command.capturepoint.zone.removepoint.success": "Removed '%s' from zone '%s'",
   "command.capturepoint.zone.status_entry": "Zone %s [%s] [%s]",
+  "command.capturepoint.zone.setrequired.success": "Set required zone of '%s' to '%s'",
+  "command.capturepoint.zone.setrequired.clear": "Cleared required zone of '%s'",
+
+  "command.capturepoint.savegraph.hint": "Use GUI Save button in singleplayer or use custom packet in dedicated server.",
 
   "gui.attack_defense_capture_point_xkmxz.block.info": "Position: [%d, %d, %d]",
   "gui.attack_defense_capture_point_xkmxz.block.create_here": "Create Point Here",

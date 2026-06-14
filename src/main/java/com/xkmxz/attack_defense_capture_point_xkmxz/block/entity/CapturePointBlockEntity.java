@@ -19,7 +19,6 @@ import net.minecraft.nbt.CompoundTag;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.entity.player.Player;
-import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.entity.BlockEntityType;
 import net.minecraft.world.level.block.state.BlockState;
@@ -31,7 +30,10 @@ public class CapturePointBlockEntity extends BlockEntity {
     public static BlockEntityType<CapturePointBlockEntity> TYPE;
 
     // ---- 持久化数据 ----
+    // boundPointName 是方块与据点的绑定关系（唯一真正的本地数据）
     private String boundPointName = "";       // 绑定的据点名称（空=未绑定）
+
+    // ---- 本地缓存（从 CaptureManager 同步，用于客户端渲染） ----
     private double radius = 5.0;              // 据点半径
     private int displayColor = 0xFFFF4444;    // 显示颜色（ARGB，默认红色）
     private boolean showRange = false;        // 是否显示范围轮廓
@@ -66,40 +68,59 @@ public class CapturePointBlockEntity extends BlockEntity {
         showRange = tag.contains(TAG_SHOW_RANGE) && tag.getBoolean(TAG_SHOW_RANGE);
     }
 
-    // ---- Getter/Setter ----
+    // ---- Getter（仅提供读取，修改通过功能方法） ----
 
     public String getBoundPointName() { return boundPointName; }
-    public void setBoundPointName(String name) {
-        this.boundPointName = name;
-        setChanged();
-        syncToClient();
-    }
-
     public double getRadius() { return radius; }
-    public void setRadius(double r) {
-        this.radius = r;
-        setChanged();
-        syncToClient();
-    }
-
     public int getDisplayColor() { return displayColor; }
-    public void setDisplayColor(int color) {
-        this.displayColor = color;
-        setChanged();
-        syncToClient();
-    }
-
     public boolean isShowRange() { return showRange; }
-    public void setShowRange(boolean show) {
-        this.showRange = show;
-        setChanged();
-        syncToClient();
-    }
 
     /** 同步数据到客户端（仅服务端调用） */
     private void syncToClient() {
         if (level != null && !level.isClientSide) {
             level.sendBlockUpdated(worldPosition, getBlockState(), getBlockState(), 3);
+        }
+    }
+
+    // ================================================================
+    //  CaptureManager 写入辅助方法
+    // ================================================================
+
+    /**
+     * 核心写入方法：优先通过直接 API 写入 CaptureManager（单机/内嵌服务端），
+     * 失败时回退到发送命令（专用服务器）。
+     *
+     * @param apiAction   直接 API 调用（接收 CaptureManager 实例）
+     * @param command     回退命令字符串（不含 / 前缀）
+     */
+    private void writeToManager(Consumer<CaptureManager> apiAction, String command) {
+        var mgr = getServerCaptureManager();
+        if (mgr != null) {
+            // 单机/内嵌服务端：直接 API 调用
+            apiAction.accept(mgr);
+        } else {
+            // 专用服务器：通过命令回退
+            var player = Minecraft.getInstance().player;
+            if (player != null && command != null && !command.isEmpty()) {
+                player.connection.sendCommand(command);
+            }
+        }
+    }
+
+    /**
+     * 从 CaptureManager 刷新本地缓存数据。
+     * 打开 UI 时调用，确保本地数据显示最新服务端数据。
+     */
+    private void refreshCacheFromManager() {
+        if (boundPointName.isEmpty()) return;
+        var mgr = getServerCaptureManager();
+        if (mgr == null) return;
+        var entry = mgr.getPoints().get(boundPointName);
+        if (entry != null) {
+            radius = entry.radius();
+            displayColor = entry.displayColor();
+            showRange = entry.showRange();
+            setChanged();
         }
     }
 
@@ -121,6 +142,9 @@ public class CapturePointBlockEntity extends BlockEntity {
         var mc = Minecraft.getInstance();
         var win = mc.getWindow();
         int scw = win.getGuiScaledWidth();
+
+        // 打开 UI 前先从 CaptureManager 刷新缓存，确保最新数据
+        refreshCacheFromManager();
 
         // 自适应宽度：屏幕 40% 但不超过 260px
         int panelW = Math.min(scw * 40 / 100, 260);
@@ -215,7 +239,7 @@ public class CapturePointBlockEntity extends BlockEntity {
     }
 
     // ================================================================
-    //  5 个功能实现
+    //  6 个功能实现 — 全部通过 writeToManager 统一接入 CaptureManager
     // ================================================================
 
     /**
@@ -233,20 +257,36 @@ public class CapturePointBlockEntity extends BlockEntity {
         var pos = worldPosition;
         // 生成默认名称：capture_<x>_<y>_<z>
         String name = "capture_" + pos.getX() + "_" + pos.getY() + "_" + pos.getZ();
-        String finalName = name;
 
-        // 检查服务端是否存在同名据点（通过命令执行后续操作）
-        var player = Minecraft.getInstance().player;
-        if (player != null) {
-            // 先保存到方块实体
-            boundPointName = finalName;
+        // 优先通过直接 API 调用 CaptureManager
+        var mgr = getServerCaptureManager();
+        if (mgr != null) {
+            // 检查是否已存在同名据点
+            if (mgr.getPoints().containsKey(name)) {
+                ToastNotification.push(ToastNotification.Type.ERROR,
+                        Component.translatable("command.capturepoint.error.point_exists", name));
+                reopenMenu();
+                return;
+            }
+            // 直接 API 创建
+            mgr.addOrUpdatePointWithRadius(name, pos, radius);
+            boundPointName = name;
             setChanged();
-
-            // 发送命令创建据点（服务端 CaptureManager 会处理）
-            player.connection.sendCommand("capturepoint createat " + finalName + " " + pos.getX() + " " + pos.getY() + " " + pos.getZ() + " " + radius);
-
+            syncToClient();
             ToastNotification.push(ToastNotification.Type.SUCCESS,
-                    Component.translatable("toast.capture_point_block.created", finalName));
+                    Component.translatable("toast.capture_point_block.created", name));
+        } else {
+            // 回退到命令（专用服务器）
+            var player = Minecraft.getInstance().player;
+            if (player != null) {
+                // 先设置绑定名（命令成功后会确认）
+                boundPointName = name;
+                setChanged();
+                player.connection.sendCommand("capturepoint createat " + name + " "
+                        + pos.getX() + " " + pos.getY() + " " + pos.getZ() + " " + radius);
+                ToastNotification.push(ToastNotification.Type.SUCCESS,
+                        Component.translatable("toast.capture_point_block.created", name));
+            }
         }
         reopenMenu();
     }
@@ -329,16 +369,18 @@ public class CapturePointBlockEntity extends BlockEntity {
                             reopenMenu();
                             return;
                         }
+
+                        // 更新本地缓存
                         radius = newRadius;
                         setChanged();
                         syncToClient();
 
-                        // 如果已绑定据点，同步到服务端
+                        // 如果已绑定据点，同步到 CaptureManager
                         if (!boundPointName.isEmpty()) {
-                            var player = Minecraft.getInstance().player;
-                            if (player != null) {
-                                player.connection.sendCommand("capturepoint setradius " + boundPointName + " " + newRadius);
-                            }
+                            writeToManager(
+                                    mgr -> mgr.setPointRadius(boundPointName, newRadius),
+                                    "capturepoint setradius " + boundPointName + " " + newRadius
+                            );
                         }
 
                         ToastNotification.push(ToastNotification.Type.SUCCESS,
@@ -357,16 +399,17 @@ public class CapturePointBlockEntity extends BlockEntity {
      * 打开对话框：切换开关 + 颜色选择。
      */
     private void funcToggleShowRange(Minecraft mc) {
-        // 简单实现：切换显示状态，并打开颜色选择对话框
+        // 切换显示状态
         showRange = !showRange;
         setChanged();
         syncToClient();
 
+        // 同步到 CaptureManager
         if (!boundPointName.isEmpty()) {
-            var player = mc.player;
-            if (player != null) {
-                player.connection.sendCommand("capturepoint settoggle " + boundPointName + " " + showRange);
-            }
+            writeToManager(
+                    mgr -> mgr.setPointShowRange(boundPointName, showRange),
+                    "capturepoint settoggle " + boundPointName + " " + showRange
+            );
         }
 
         if (showRange) {
@@ -420,15 +463,18 @@ public class CapturePointBlockEntity extends BlockEntity {
         var unbindZoneBtn = new Button().setText(Component.translatable("gui.capture_point_block.dialog.unbind.zone"));
         unbindZoneBtn.layout(l -> l.widthPercent(100).height(24));
         unbindZoneBtn.setOnClick(e -> {
-            var player = mc.player;
-            if (player != null) {
-                // 查找据点所属区域，从区域中移除
-                String currentName = boundPointName;
-                // 通过命令移除，由服务端 CaptureManager 处理
-                player.connection.sendCommand("capturepoint removefromallzones " + currentName);
-                ToastNotification.push(ToastNotification.Type.SUCCESS,
-                        Component.translatable("toast.capture_point_block.unbind_zone", currentName));
-            }
+            String currentName = boundPointName;
+            writeToManager(
+                    mgr -> {
+                        String zn = mgr.findZoneForPoint(currentName);
+                        if (zn != null) {
+                            mgr.removePointFromZone(zn, currentName);
+                        }
+                    },
+                    "capturepoint removefromallzones " + currentName
+            );
+            ToastNotification.push(ToastNotification.Type.SUCCESS,
+                    Component.translatable("toast.capture_point_block.unbind_zone", currentName));
             mc.setScreen(null);
             reopenMenu();
         });
@@ -480,12 +526,12 @@ public class CapturePointBlockEntity extends BlockEntity {
             btn.layout(l -> l.widthPercent(100).height(28));
             String zoneName = entry.name();
             btn.setOnClick(e -> {
-                var player = mc.player;
-                if (player != null) {
-                    player.connection.sendCommand("capturepoint zone addpoint " + zoneName + " " + boundPointName);
-                    ToastNotification.push(ToastNotification.Type.SUCCESS,
-                            Component.translatable("toast.capture_point_block.bound_to_zone", boundPointName, zoneName));
-                }
+                writeToManager(
+                        mgr2 -> mgr2.addPointToZone(zoneName, boundPointName),
+                        "capturepoint zone addpoint " + zoneName + " " + boundPointName
+                );
+                ToastNotification.push(ToastNotification.Type.SUCCESS,
+                        Component.translatable("toast.capture_point_block.bound_to_zone", boundPointName, zoneName));
                 mc.setScreen(null);
                 reopenMenu();
             });
@@ -553,15 +599,17 @@ public class CapturePointBlockEntity extends BlockEntity {
                             .backgroundTexture(new ColorRectTexture(color)));
             int selectedColor = color;
             colorBtn.addEventListener(com.lowdragmc.lowdraglib2.gui.ui.event.UIEvents.MOUSE_DOWN, ev -> {
+                // 更新本地缓存
                 displayColor = selectedColor;
                 setChanged();
                 syncToClient();
 
+                // 同步到 CaptureManager
                 if (!boundPointName.isEmpty()) {
-                    var player = mc.player;
-                    if (player != null) {
-                        player.connection.sendCommand("capturepoint setcolor " + boundPointName + " " + selectedColor);
-                    }
+                    writeToManager(
+                            mgr -> mgr.setPointDisplayColor(boundPointName, selectedColor),
+                            "capturepoint setcolor " + boundPointName + " " + selectedColor
+                    );
                 }
 
                 ToastNotification.push(ToastNotification.Type.SUCCESS,
@@ -595,10 +643,10 @@ public class CapturePointBlockEntity extends BlockEntity {
             setChanged();
             syncToClient();
             if (!boundPointName.isEmpty()) {
-                var player = mc.player;
-                if (player != null) {
-                    player.connection.sendCommand("capturepoint settoggle " + boundPointName + " false");
-                }
+                writeToManager(
+                        mgr -> mgr.setPointShowRange(boundPointName, false),
+                        "capturepoint settoggle " + boundPointName + " false"
+                );
             }
             ToastNotification.push(ToastNotification.Type.INFO,
                     Component.translatable("toast.capture_point_block.range_off"));

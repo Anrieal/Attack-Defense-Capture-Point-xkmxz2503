@@ -19,9 +19,12 @@
   "command.capturepoint.help.setradius": "/capturepoint setradius <名称> <半径> - 设置据点半径",
   "command.capturepoint.help.setcolor": "/capturepoint setcolor <名称> <颜色> - 设置据点显示颜色",
   "command.capturepoint.help.settoggle": "/capturepoint settoggle <名称> <true/false> - 切换范围显示",
+  "command.capturepoint.help.zone_setrequired": "/capturepoint zone setrequired <区域> [依赖区域|clear] - 设置/清除区域依赖",
   "command.capturepoint.help.relationships": "/capturepoint relationships - 查看所有据点和区域的关系",
+  "command.capturepoint.help.savegraph": "/capturepoint savegraph - 从编辑器保存图数据（单机请使用GUI保存按钮）",
 
   "command.capturepoint.gui.hint": "使用据点管理器物品或右键点击据点方块打开控制面板。",
+  "command.capturepoint.gui.hint2": "单机模式下，手持管理器物品右键即可打开节点图编辑器。",
 
   "command.capturepoint.create.success": "已创建据点 '%s' 在 [%d, %d, %d]",
   "command.capturepoint.remove.success": "已移除据点 '%s'",
@@ -61,6 +64,10 @@
   "command.capturepoint.zone.addpoint.success": "已将 '%s' 添加到区域 '%s'",
   "command.capturepoint.zone.removepoint.success": "已将 '%s' 从区域 '%s' 移除",
   "command.capturepoint.zone.status_entry": "区域 %s [%s] [%s]",
+  "command.capturepoint.zone.setrequired.success": "已将区域 '%s' 的依赖区域设为 '%s'",
+  "command.capturepoint.zone.setrequired.clear": "已清除区域 '%s' 的依赖区域",
+
+  "command.capturepoint.savegraph.hint": "单机请使用GUI保存按钮，专用服务器需通过自定义网络包实现。",
 
   "gui.attack_defense_capture_point_xkmxz.block.info": "位置: [%d, %d, %d]",
   "gui.attack_defense_capture_point_xkmxz.block.create_here": "在此创建据点",

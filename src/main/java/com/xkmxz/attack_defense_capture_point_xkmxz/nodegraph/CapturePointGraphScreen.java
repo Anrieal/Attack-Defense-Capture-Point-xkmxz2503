@@ -9,6 +9,7 @@ import com.lowdragmc.lowdraglib2.gui.ui.elements.Button;
 import com.lowdragmc.lowdraglib2.gui.ui.elements.Label;
 import com.lowdragmc.lowdraglib2.gui.ui.styletemplate.Sprites;
 import com.lowdragmc.lowdraglib2.nodegraphtookit.model.GraphElementModel;
+import com.lowdragmc.lowdraglib2.nodegraphtookit.model.INodeWithOptions;
 import com.lowdragmc.lowdraglib2.nodegraphtookit.model.node.NodeModel;
 import com.lowdragmc.lowdraglib2.nodegraphtookit.model.node.PortModel;
 import com.lowdragmc.lowdraglib2.nodegraphtookit.model.wire.WireModel;
@@ -39,6 +40,8 @@ public class CapturePointGraphScreen {
         this.graphView = new CapturePointGraphView();
         this.graphView.setLevel(level);
         this.graphView.loadGraph(graph);
+        // 注册实时数据刷新回调（每 ~15 tick 由 graphView.screenTick() 驱动）
+        this.graphView.setRefreshCallback(this::refreshNodeTitles);
     }
 
     public void open() {
@@ -71,6 +74,8 @@ public class CapturePointGraphScreen {
 
         // 根据 CaptureManager 加载数据到图
         loadDataToGraph();
+        // 初始立即同步节点选项数据
+        refreshNodeTitles();
 
         var ui = ModularUI.of(UI.of(root));
         mc.setScreen(new ModularUIScreen(ui,
@@ -371,6 +376,132 @@ public class CapturePointGraphScreen {
                 } catch (Exception ignored) {}
             }
 
+        } catch (Exception ignored) {}
+    }
+
+    // ================================================================
+    //  实时刷新节点标题（由 screenTick 每 ~0.75 秒驱动）
+    // ================================================================
+
+    /**
+     * 从 CaptureManager 读取最新数据，更新所有节点标题以反映真实状态。
+     */
+    public void refreshNodeTitles() {
+        try {
+            var mgr = getServerCaptureManager();
+            if (mgr == null) return;
+
+            var points = mgr.getPoints();
+            var zones = mgr.getZones();
+
+            for (var element : graph.graphModel.getGraphElementModels()) {
+                if (element instanceof NodeModel nm) {
+                    String name = nm.getName();
+                    if (name == null || name.isEmpty()) continue;
+
+                    if (hasOutputPort(nm, "point_signal")) {
+                        // 据点节点：显示名称 + 所有者
+                        var entry = points.get(name);
+                        if (entry != null) {
+                            String owner = entry.owner() != null ? entry.owner() : "none";
+                            nm.setTitle(Component.literal(name + " [" + owner + "]"));
+                            // 同步选项卡数据
+                            syncPointOptions(nm, entry);
+                        } else {
+                            nm.setTitle(Component.literal(name));
+                        }
+                    } else if (hasOutputPort(nm, "zone_out") || hasInputPort(nm, "point_in")) {
+                        // 区域节点：显示名称 + 占领状态 + 点数
+                        var entry = zones.get(name);
+                        if (entry != null) {
+                            boolean captured = mgr.isZoneCaptured(name);
+                            boolean accessible = mgr.canAccessZone(name);
+                            int ptCount = entry.capturePoints().size();
+                            String status = captured ? "✓" : "✗";
+                            String access = accessible ? "" : " 🔒";
+                            nm.setTitle(Component.literal(name + " [" + status + " " + ptCount + "pts" + access + "]"));
+                            // 同步选项卡数据
+                            syncZoneOptions(nm, entry, captured);
+                        } else {
+                            nm.setTitle(Component.literal(name));
+                        }
+                    }
+                }
+            }
+        } catch (Exception ignored) {}
+    }
+
+    /**
+     * 同步据点节点选项（owner / position / captured）
+     */
+    private static void syncPointOptions(NodeModel nm, CaptureManager.CapturePointEntry entry) {
+        if (!(nm instanceof INodeWithOptions opts)) return;
+        try {
+            trySetNodeOption(opts, "owner", entry.owner() != null ? entry.owner() : "");
+            trySetNodeOption(opts, "position", entry.pos().getX() + ", " + entry.pos().getY() + ", " + entry.pos().getZ());
+            tryAnySetter(opts.getNodeOptionById("owner"), entry.owner() != null ? entry.owner() : "");
+            tryAnySetter(opts.getNodeOptionById("position"), entry.pos().getX() + ", " + entry.pos().getY() + ", " + entry.pos().getZ());
+        } catch (Exception ignored) {}
+    }
+
+    /**
+     * 同步区域节点选项（captured / required_zone / points）
+     */
+    private static void syncZoneOptions(NodeModel nm, CaptureManager.ZoneEntry entry, boolean captured) {
+        if (!(nm instanceof INodeWithOptions opts)) return;
+        try {
+            trySetNodeOption(opts, "captured", captured);
+            trySetNodeOption(opts, "required_zone", entry.requiredZone() != null ? entry.requiredZone() : "");
+            trySetNodeOption(opts, "points", String.join(", ", entry.capturePoints()));
+            tryAnySetter(opts.getNodeOptionById("captured"), captured);
+            tryAnySetter(opts.getNodeOptionById("required_zone"), entry.requiredZone() != null ? entry.requiredZone() : "");
+            tryAnySetter(opts.getNodeOptionById("points"), String.join(", ", entry.capturePoints()));
+        } catch (Exception ignored) {}
+    }
+
+    /**
+     * 尝试在 INodeWithOptions 上直接调用双向 setter（无方法名过滤）。
+     */
+    private static void trySetNodeOption(INodeWithOptions opts, String id, Object value) {
+        try {
+            for (var method : opts.getClass().getMethods()) {
+                if (method.getParameterCount() == 2
+                        && method.getParameterTypes()[0] == String.class
+                        && method.getParameterTypes()[1].isAssignableFrom(value != null ? value.getClass() : Object.class)) {
+                    method.setAccessible(true);
+                    method.invoke(opts, id, value);
+                    return;
+                }
+            }
+        } catch (Exception ignored) {}
+    }
+
+    /**
+     * 尝试在 INodeOption 上调用任意单参数方法（无方法名过滤）。
+     * 也尝试 2 参数方法 setValue(v, false) 模式。
+     */
+    private static void tryAnySetter(Object option, Object value) {
+        if (option == null) return;
+        try {
+            var cls = option.getClass();
+            for (var method : cls.getMethods()) {
+                int pc = method.getParameterCount();
+                Class<?> pt = pc > 0 ? method.getParameterTypes()[0] : null;
+                if (pc == 1 && pt != null && (pt == Object.class || pt == String.class || pt == Boolean.class
+                        || pt == boolean.class || (value != null && pt.isAssignableFrom(value.getClass())))) {
+                    method.setAccessible(true);
+                    method.invoke(option, value);
+                    return;
+                }
+                if (pc == 2 && pt != null && (pt == Object.class || pt == String.class || pt == Boolean.class
+                        || pt == boolean.class || (value != null && pt.isAssignableFrom(value.getClass())))) {
+                    if (method.getParameterTypes()[1] == boolean.class) {
+                        method.setAccessible(true);
+                        method.invoke(option, value, false);
+                        return;
+                    }
+                }
+            }
         } catch (Exception ignored) {}
     }
 

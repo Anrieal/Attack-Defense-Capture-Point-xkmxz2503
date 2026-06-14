@@ -21,6 +21,8 @@ public class CapturePointGraphView extends GraphView {
     private int pendingViewportResetTicks;
     private Level level;
     private ToastLayer toastLayer;
+    private Runnable refreshCallback;
+    private int refreshCounter;
 
     public CapturePointGraphView() {
         super();
@@ -35,6 +37,13 @@ public class CapturePointGraphView extends GraphView {
 
     public void setToastLayer(ToastLayer toastLayer) {
         this.toastLayer = toastLayer;
+    }
+
+    /**
+     * 设置节点数据刷新回调，每 tick 都会调用（内部按间隔节流）。
+     */
+    public void setRefreshCallback(Runnable callback) {
+        this.refreshCallback = callback;
     }
 
     private void hideHeaders() {
@@ -88,6 +97,13 @@ public class CapturePointGraphView extends GraphView {
                     resetViewportTransform();
                 }
             }
+        }
+
+        // 每15 tick（约0.75秒）刷新一次节点标题，显示实时数据
+        refreshCounter++;
+        if (refreshCounter >= 15 && refreshCallback != null) {
+            refreshCounter = 0;
+            refreshCallback.run();
         }
     }
 

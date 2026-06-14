@@ -178,6 +178,10 @@
   "command.capturepoint.removefromallzones.success": "Removed '%s' from zone '%s'",
   "command.capturepoint.removefromallzones.not_in_zone": "'%s' is not in any zone",
 
+  "gui.capture_point_graph.dialog.conflict.title": "Data Conflict Detected",
+  "gui.capture_point_graph.dialog.conflict.message": "The data was modified externally (by command/block). Overwrite?",
+  "gui.capture_point_graph.dialog.conflict.overwrite": "Overwrite",
+
   "toast.capture_point_graph.saved": "Graph saved successfully",
   "toast.capture_point_graph.advanced_config.saved": "Configuration saved for '%s'",
   "toast.capture_point_graph.edit_mode.on": "Edit Mode: ON - Node properties can be edited",

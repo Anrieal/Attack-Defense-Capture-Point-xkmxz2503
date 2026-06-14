@@ -178,6 +178,10 @@
   "command.capturepoint.removefromallzones.success": "已将 '%s' 从区域 '%s' 中移除",
   "command.capturepoint.removefromallzones.not_in_zone": "'%s' 不在任何区域中",
 
+  "gui.capture_point_graph.dialog.conflict.title": "检测到数据冲突",
+  "gui.capture_point_graph.dialog.conflict.message": "外部操作（命令/方块）修改了数据，是否覆盖？",
+  "gui.capture_point_graph.dialog.conflict.overwrite": "覆盖",
+
   "toast.capture_point_graph.saved": "节点图保存成功",
   "toast.capture_point_graph.advanced_config.saved": "据点 '%s' 的配置已保存",
   "toast.capture_point_graph.edit_mode.on": "编辑模式：已开启 - 节点属性可编辑",

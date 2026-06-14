@@ -36,6 +36,7 @@ public class CapturePointGraphScreen {
     private final CapturePointGraphView graphView;
     private final CapturePointGraph graph;
     private boolean editMode = false;
+    private long snapshotVersion = -1; // 进入编辑模式时捕获的版本号，用于冲突检测
 
     public CapturePointGraphScreen(Level level) {
         this.level = level;
@@ -51,6 +52,12 @@ public class CapturePointGraphScreen {
     /** 返回当前是否处于编辑模式，GraphView 可用此判断菜单行为 */
     public boolean isEditMode() {
         return editMode;
+    }
+
+    /** 进入编辑模式时快照当前版本号 */
+    private void captureSnapshotVersion() {
+        var mgr = getServerCaptureManager();
+        snapshotVersion = mgr != null ? mgr.getVersion() : -1;
     }
 
     public void open() {
@@ -115,6 +122,10 @@ public class CapturePointGraphScreen {
             updateEditToggleButton(editToggleBtn);
             graphView.showPanelsForEditMode(editMode);
             tb.style(s -> s.backgroundTexture(new ColorRectTexture(editMode ? EDIT_MODE_BG : 0xFF16213E)));
+            if (editMode) {
+                // 进入编辑模式时快照版本号，用于保存时的冲突检测
+                captureSnapshotVersion();
+            }
             ToastNotification.push(editMode ? ToastNotification.Type.INFO : ToastNotification.Type.SUCCESS,
                     Component.translatable(editMode ? "toast.capture_point_graph.edit_mode.on" : "toast.capture_point_graph.edit_mode.off"));
         });
@@ -159,17 +170,122 @@ public class CapturePointGraphScreen {
     }
 
     // ================================================================
-    //  保存节点图到 CaptureManager
+    //  保存节点图到 CaptureManager (快照模式 + 版本检测)
     // ================================================================
 
+    /** 从当前节点模型中读取选项值 */
+    private static String getOptionString(NodeModel nm, String id) {
+        if (nm instanceof INodeWithOptions opts) {
+            var opt = opts.getNodeOptionById(id);
+            if (opt instanceof com.lowdragmc.lowdraglib2.nodegraphtookit.model.node.NodeOption nodeOpt) {
+                var port = nodeOpt.getPortModel();
+                if (port instanceof IFieldValueConfigurable configurable) {
+                    var v = configurable.getValue();
+                    return v != null ? v.toString() : "";
+                }
+            }
+        }
+        return "";
+    }
+
+    private static double getOptionDouble(NodeModel nm, String id) {
+        try {
+            return Double.parseDouble(getOptionString(nm, id));
+        } catch (Exception e) { return 5.0; }
+    }
+
+    private static int getOptionInt(NodeModel nm, String id) {
+        try {
+            return Integer.parseInt(getOptionString(nm, id));
+        } catch (Exception e) { return 0xFFFF4444; }
+    }
+
+    private static boolean getOptionBool(NodeModel nm, String id) {
+        return "true".equalsIgnoreCase(getOptionString(nm, id));
+    }
+
     /**
-     * 将当前节点图中的所有节点和连线保存到 CaptureManager。
-     * 直接通过 Java API 调用，不经过命令系统。
+     * 从节点图中构建完整数据快照。
+     * 读取所有节点模型中的选项值，构造新的 points/zones 映射。
+     * 编辑模式下此方法作为保存的唯一入口。
+     */
+    private Map.Entry<Map<String, CaptureManager.CapturePointEntry>, Map<String, CaptureManager.ZoneEntry>> buildSnapshotFromGraph() {
+        var newPoints = new LinkedHashMap<String, CaptureManager.CapturePointEntry>();
+        var newZones = new LinkedHashMap<String, CaptureManager.ZoneEntry>();
+
+        // 第一遍：收集所有节点
+        var pointModels = new HashMap<String, NodeModel>();
+        var zoneModels = new HashMap<String, NodeModel>();
+
+        for (var element : graph.graphModel.getGraphElementModels()) {
+            if (element instanceof NodeModel nm) {
+                String name = nm.getName();
+                if (name == null || name.isEmpty()) continue;
+                if (hasOutputPort(nm, "point_signal")) {
+                    pointModels.put(name, nm);
+                } else if (hasOutputPort(nm, "zone_out") || hasInputPort(nm, "point_in")) {
+                    zoneModels.put(name, nm);
+                }
+            }
+        }
+
+        // 构建据点数据
+        var player = mc().player;
+        BlockPos defaultPos = player != null ? player.blockPosition() : BlockPos.ZERO;
+        for (var entry : pointModels.entrySet()) {
+            String name = entry.getKey();
+            var nm = entry.getValue();
+            // 从选项读取坐标（或使用默认）
+            String posStr = getOptionString(nm, "position");
+            BlockPos pos = defaultPos;
+            if (!posStr.isEmpty()) {
+                String[] parts = posStr.split(",");
+                if (parts.length == 3) {
+                    try {
+                        pos = new BlockPos(
+                            Integer.parseInt(parts[0].trim()),
+                            Integer.parseInt(parts[1].trim()),
+                            Integer.parseInt(parts[2].trim())
+                        );
+                    } catch (Exception ignored) {}
+                }
+            }
+            String owner = getOptionString(nm, "owner");
+            double radius = getOptionDouble(nm, "radius");
+            int color = getOptionInt(nm, "display_color");
+            boolean showRange = getOptionBool(nm, "show_range");
+            newPoints.put(name, new CaptureManager.CapturePointEntry(
+                    name, pos, owner.isEmpty() ? null : owner,
+                    radius, color, showRange));
+        }
+
+        // 构建区域数据
+        for (var entry : zoneModels.entrySet()) {
+            String name = entry.getKey();
+            var nm = entry.getValue();
+            String reqZone = getOptionString(nm, "required_zone");
+            String pointsStr = getOptionString(nm, "edit_points");
+            List<String> cpList = new ArrayList<>();
+            if (!pointsStr.isEmpty()) {
+                for (var pn : pointsStr.split(",")) {
+                    pn = pn.trim();
+                    if (!pn.isEmpty()) cpList.add(pn);
+                }
+            }
+            newZones.put(name, new CaptureManager.ZoneEntry(
+                    name, cpList, reqZone.isEmpty() ? null : reqZone));
+        }
+
+        return new AbstractMap.SimpleEntry<>(newPoints, newZones);
+    }
+
+    /**
+     * 将当前节点图中的所有更改保存到 CaptureManager。
+     * 使用快照方式：构建完整数据 → 版本检测 → applyGraphSnapshot 原子写入。
      */
     private void saveGraph() {
         var mgr = getServerCaptureManager();
         if (mgr == null) {
-            // 非单机/服务端环境，通过命令回退
             var player = mc().player;
             if (player != null) {
                 player.connection.sendCommand("capturepoint savegraph");
@@ -180,135 +296,23 @@ public class CapturePointGraphScreen {
         }
 
         try {
-            // 收集当前图中所有节点
-            var graphPointNames = new HashSet<String>();
-            var graphZoneNames = new HashSet<String>();
-            // pointModels 和 zoneModels: name → NodeModel
-            var pointModels = new HashMap<String, NodeModel>();
-            var zoneModels = new HashMap<String, NodeModel>();
+            // 构建数据快照
+            var snapshot = buildSnapshotFromGraph();
+            var newPoints = snapshot.getKey();
+            var newZones = snapshot.getValue();
 
-            for (var element : graph.graphModel.getGraphElementModels()) {
-                if (element instanceof NodeModel nm) {
-                    String name = nm.getName();
-                    if (name == null || name.isEmpty()) continue;
-                    // 通过检查输出端口来判断类型
-                    if (hasOutputPort(nm, "point_signal")) {
-                        graphPointNames.add(name);
-                        pointModels.put(name, nm);
-                    } else if (hasOutputPort(nm, "zone_out") || hasInputPort(nm, "point_in")) {
-                        graphZoneNames.add(name);
-                        zoneModels.put(name, nm);
-                    }
+            // 编辑模式下进行版本冲突检测
+            if (editMode && snapshotVersion >= 0) {
+                long currentVersion = mgr.getVersion();
+                if (currentVersion != snapshotVersion) {
+                    // 数据已被外部修改（命令/方块），弹出确认对话框
+                    openConflictDialog(mgr, newPoints, newZones);
+                    return;
                 }
             }
 
-            // 删除已被移除的据点/区域
-            var toRemovePoints = new ArrayList<String>();
-            for (var name : mgr.getPoints().keySet()) {
-                if (!graphPointNames.contains(name)) toRemovePoints.add(name);
-            }
-            for (var name : toRemovePoints) mgr.removePoint(name);
-
-            var toRemoveZones = new ArrayList<String>();
-            for (var name : mgr.getZones().keySet()) {
-                if (!graphZoneNames.contains(name)) toRemoveZones.add(name);
-            }
-            for (var name : toRemoveZones) mgr.removeZone(name);
-
-            // 创建新增的据点（使用玩家位置或原点）
-            var player = mc().player;
-            BlockPos defaultPos = player != null ? player.blockPosition() : BlockPos.ZERO;
-
-            for (var name : graphPointNames) {
-                if (!mgr.getPoints().containsKey(name)) {
-                    mgr.addOrUpdatePoint(name, defaultPos);
-                }
-            }
-
-            // 创建新增的区域
-            for (var name : graphZoneNames) {
-                if (!mgr.getZones().containsKey(name)) {
-                    mgr.createZone(name, null);
-                }
-            }
-
-            // === 解析连线，重建关系 ===
-
-            // 先清除所有区域中的据点关联和旧依赖
-            for (var zoneName : new ArrayList<>(mgr.getZones().keySet())) {
-                var zone = mgr.getZones().get(zoneName);
-                // 清除据点关联
-                for (var cpName : new ArrayList<>(zone.capturePoints())) {
-                    mgr.removePointFromZone(zoneName, cpName);
-                }
-                // 清除旧依赖（保留据点列表，仅重置 requiredZone）
-                if (zone.requiredZone() != null) {
-                    mgr.setZoneRequiredZone(zoneName, null);
-                }
-            }
-
-            // 构建 port UID → node name 的映射
-            var portUidToNodeName = new HashMap<UUID, String>();
-            for (var nm : pointModels.values()) {
-                String nodeName = nm.getName();
-                for (var port : nm.getInputsById().values()) portUidToNodeName.put(port.getUid(), nodeName);
-                for (var port : nm.getOutputsById().values()) portUidToNodeName.put(port.getUid(), nodeName);
-            }
-            for (var nm : zoneModels.values()) {
-                String nodeName = nm.getName();
-                for (var port : nm.getInputsById().values()) portUidToNodeName.put(port.getUid(), nodeName);
-                for (var port : nm.getOutputsById().values()) portUidToNodeName.put(port.getUid(), nodeName);
-            }
-
-            // 解析所有连线
-            var pointZoneConnections = new ArrayList<AbstractMap.SimpleEntry<String, String>>(); // point → zone
-            var zoneDependencies = new ArrayList<AbstractMap.SimpleEntry<String, String>>(); // from → to (zone → zone)
-
-            for (var element : graph.graphModel.getGraphElementModels()) {
-                if (element instanceof WireModel wire) {
-                    UUID fromPortUid = wire.getFromPortUid();
-                    UUID toPortUid = wire.getToPortUid();
-
-                    String fromNode = portUidToNodeName.get(fromPortUid);
-                    String toNode = portUidToNodeName.get(toPortUid);
-                    if (fromNode == null || toNode == null) continue;
-
-                    // 查找端口名称：从 fromPort 对象中获取
-                    PortModel fromPort = wire.getFromPort();
-                    PortModel toPort = wire.getToPort();
-                    if (fromPort == null || toPort == null) continue;
-
-                    String fromPortName = fromPort.getName();
-                    String toPortName = toPort.getName();
-
-                    // point_signal → point_in: 据点属于区域
-                    if ("point_signal".equals(fromPortName) && "point_in".equals(toPortName)) {
-                        if (graphPointNames.contains(fromNode) && graphZoneNames.contains(toNode)) {
-                            pointZoneConnections.add(new AbstractMap.SimpleEntry<>(fromNode, toNode));
-                        }
-                    }
-                    // zone_out → required_zone: 区域前后依赖
-                    if ("zone_out".equals(fromPortName) && "required_zone".equals(toPortName)) {
-                        if (graphZoneNames.contains(fromNode) && graphZoneNames.contains(toNode)) {
-                            zoneDependencies.add(new AbstractMap.SimpleEntry<>(fromNode, toNode));
-                        }
-                    }
-                }
-            }
-
-            // 重建据点→区域关联
-            for (var conn : pointZoneConnections) {
-                mgr.addPointToZone(conn.getValue(), conn.getKey());
-            }
-
-            // 重建区域依赖关系
-            for (var dep : zoneDependencies) {
-                // dep: key=前置区域(front), value=后置区域(back) → 后置区域依赖前置区域
-                mgr.setZoneRequiredZone(dep.getValue(), dep.getKey());
-            }
-
-            mgr.setDirty();
-
+            // 无冲突或非编辑模式：直接应用
+            mgr.applyGraphSnapshot(newPoints, newZones);
             ToastNotification.push(ToastNotification.Type.SUCCESS,
                     Component.translatable("toast.capture_point_graph.saved"));
 
@@ -316,6 +320,69 @@ public class CapturePointGraphScreen {
             ToastNotification.push(ToastNotification.Type.ERROR,
                     Component.literal("Save failed: " + e.getMessage()));
         }
+    }
+
+    /**
+     * 打开版本冲突对话框，询问用户是否覆盖外部修改的数据。
+     */
+    private void openConflictDialog(CaptureManager mgr,
+                                     Map<String, CaptureManager.CapturePointEntry> newPoints,
+                                     Map<String, CaptureManager.ZoneEntry> newZones) {
+        var mc = mc();
+        int dw = 340, dh = 130;
+
+        var root = new UIElement()
+                .layout(l -> l.width(dw).height(dh).paddingAll(12).gapAll(8)
+                        .flexDirection(dev.vfyjxf.taffy.style.FlexDirection.COLUMN))
+                .style(s -> s.background(Sprites.BORDER)
+                        .backgroundTexture(new ColorRectTexture(0xFF1A1A2E)));
+
+        var title = new Label().setText(
+                Component.translatable("gui.capture_point_graph.dialog.conflict.title"));
+        title.layout(l -> l.widthPercent(100).heightAuto());
+        root.addChildren(title);
+
+        var msg = new Label().setText(
+                Component.translatable("gui.capture_point_graph.dialog.conflict.message"));
+        msg.layout(l -> l.widthPercent(100).heightAuto());
+        root.addChildren(msg);
+
+        var spacer = new UIElement().layout(l -> l.flex(1));
+
+        var btnRow = new UIElement()
+                .layout(l -> l.widthPercent(100).height(30)
+                        .flexDirection(dev.vfyjxf.taffy.style.FlexDirection.ROW).gapAll(6));
+        var overwriteBtn = new Button().setText(
+                Component.translatable("gui.capture_point_graph.dialog.conflict.overwrite"));
+        overwriteBtn.layout(l -> l.flex(1).heightPercent(100));
+        overwriteBtn.setOnClick(e -> {
+            mgr.applyGraphSnapshot(newPoints, newZones);
+            ToastNotification.push(ToastNotification.Type.SUCCESS,
+                    Component.translatable("toast.capture_point_graph.saved"));
+            mc.setScreen(null);
+            new CapturePointGraphScreen(level).open();
+        });
+
+        var cancelBtn = new Button().setText(
+                Component.translatable("gui.capture_point_graph.dialog.cancel"));
+        cancelBtn.layout(l -> l.flex(1).heightPercent(100));
+        cancelBtn.setOnClick(e -> {
+            mc.setScreen(null);
+            new CapturePointGraphScreen(level).open();
+        });
+
+        btnRow.addChildren(overwriteBtn, cancelBtn);
+        root.addChildren(title, msg, spacer, btnRow);
+
+        var wrap = new UIElement()
+                .layout(l -> l.widthPercent(100).heightPercent(100).paddingAll(0).gapAll(0)
+                        .justifyContent(dev.vfyjxf.taffy.style.AlignContent.CENTER)
+                        .alignItems(dev.vfyjxf.taffy.style.AlignItems.CENTER));
+        wrap.addChildren(root);
+
+        var ui = ModularUI.of(UI.of(wrap));
+        mc.setScreen(new ModularUIScreen(ui,
+                Component.translatable("gui.capture_point_graph.dialog.conflict.title")));
     }
 
     /** 检查节点是否有指定名称的输出端口 */
@@ -566,66 +633,16 @@ public class CapturePointGraphScreen {
     }
 
     /**
-     * 当节点选项值被用户编辑时调用，将变更写回 CaptureManager。
-     * 仅在编辑模式下执行实际回写，非编辑模式忽略。
+     * 当节点选项值被用户编辑时调用。
+     * 编辑模式下：变更仅保存在节点模型的 Constant 中，不写入 CaptureManager，
+     * 所有改动通过 "保存" 按钮的 buildSnapshotFromGraph → applyGraphSnapshot 批量写入。
+     * 非编辑模式：忽略回写（只读显示）。
      */
     private void onOptionValueChanged(CaptureManager mgr, String nodeName, boolean isPointNode,
                                        String optionId, Object newValue) {
-        // 仅在编辑模式下执行回写
-        if (!editMode) return;
-        try {
-            if (isPointNode) {
-                switch (optionId) {
-                    case "owner" -> {
-                        String ownerStr = newValue instanceof String s ? s.trim() : "";
-                        mgr.setPointOwner(nodeName, ownerStr.isEmpty() ? null : ownerStr);
-                    }
-                    case "radius" -> {
-                        double radius = newValue instanceof Number n ? n.doubleValue() : 5.0;
-                        if (radius >= 1 && radius <= 100) {
-                            mgr.setPointRadius(nodeName, radius);
-                        }
-                    }
-                    case "display_color" -> {
-                        int color = newValue instanceof Number n ? n.intValue() : 0xFFFF4444;
-                        mgr.setPointDisplayColor(nodeName, color);
-                    }
-                    case "show_range" -> {
-                        boolean show = newValue instanceof Boolean b ? b : false;
-                        mgr.setPointShowRange(nodeName, show);
-                    }
-                }
-            } else {
-                // 区域节点
-                switch (optionId) {
-                    case "required_zone" -> {
-                        String zoneStr = newValue instanceof String s ? s.trim() : "";
-                        mgr.setZoneRequiredZone(nodeName, zoneStr.isEmpty() ? null : zoneStr);
-                    }
-                    case "edit_points" -> {
-                        // 编辑据点列表：先清空现有，再添加
-                        // 首先获取当前区域
-                        var zone = mgr.getZones().get(nodeName);
-                        if (zone != null) {
-                            // 移除所有现有据点
-                            for (var cpName : new java.util.ArrayList<>(zone.capturePoints())) {
-                                mgr.removePointFromZone(nodeName, cpName);
-                            }
-                            // 解析逗号分隔的据点名称并添加
-                            String pointsStr = newValue instanceof String s ? s.trim() : "";
-                            if (!pointsStr.isEmpty()) {
-                                for (var name : pointsStr.split(",")) {
-                                    name = name.trim();
-                                    if (!name.isEmpty() && mgr.getPoints().containsKey(name)) {
-                                        mgr.addPointToZone(nodeName, name);
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        } catch (Exception ignored) {}
+        // 编辑模式下变更仅存储于节点模型的本地 Constant 中，
+        // 等待用户点击"保存"时通过 buildSnapshotFromGraph → applyGraphSnapshot 批量写入。
+        // 此处不做任何 CaptureManager 写入操作，以保持数据一致性。
     }
 
     // ================================================================

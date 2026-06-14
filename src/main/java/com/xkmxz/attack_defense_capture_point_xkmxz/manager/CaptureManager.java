@@ -20,9 +20,11 @@ public class CaptureManager extends SavedData {
 
     private static final Logger LOGGER = LogUtils.getLogger();
     private static final String DATA_NAME = "capture_points_data";
+    private static final String TAG_VERSION = "version";
 
     private final Map<String, CapturePointEntry> points = new LinkedHashMap<>();
     private final Map<String, ZoneEntry> zones = new LinkedHashMap<>();
+    private long version = 0; // 数据版本号，每次写入递增，用于 GUI 检测外部修改
 
     // ---- Data Records ----
 
@@ -122,6 +124,35 @@ public class CaptureManager extends SavedData {
         load(tag, registries);
     }
 
+    // ---- Version & Batch Write ----
+
+    /** 获取当前数据版本号，每次写入递增 */
+    public long getVersion() {
+        return version;
+    }
+
+    /** 递增版本号并标记脏数据 */
+    private void bumpVersion() {
+        version++;
+        setDirty();
+    }
+
+    /**
+     * 批量应用 GUI 编辑器的完整数据快照（原子操作，版本号只递增一次）。
+     * 此方法是 GUI 编辑模式保存时的唯一写入入口，
+     * 命令和方块的其他单次写入仍走各自的 setXxx 方法。
+     */
+    public void applyGraphSnapshot(Map<String, CapturePointEntry> newPoints,
+                                    Map<String, ZoneEntry> newZones) {
+        points.clear();
+        zones.clear();
+        points.putAll(newPoints);
+        zones.putAll(newZones);
+        bumpVersion();
+        LOGGER.info("Applied graph snapshot: {} points, {} zones (version {})",
+                points.size(), zones.size(), version);
+    }
+
     // ---- Data Access ----
 
     public Map<String, CapturePointEntry> getPoints() {
@@ -135,25 +166,25 @@ public class CaptureManager extends SavedData {
     public void addOrUpdatePoint(String name, BlockPos pos) {
         points.put(name, new CapturePointEntry(name, pos, null,
                 CapturePointEntry.DEFAULT_RADIUS, CapturePointEntry.DEFAULT_COLOR, false));
-        setDirty();
+        bumpVersion();
     }
 
     public void addOrUpdatePointWithRadius(String name, BlockPos pos, double radius) {
         points.put(name, new CapturePointEntry(name, pos, null,
                 radius, CapturePointEntry.DEFAULT_COLOR, false));
-        setDirty();
+        bumpVersion();
     }
 
     public void removePoint(String name) {
         points.remove(name);
-        setDirty();
+        bumpVersion();
     }
 
     public void setPointOwner(String name, @Nullable String owner) {
         var existing = points.get(name);
         if (existing != null) {
             points.put(name, existing.withOwner(owner));
-            setDirty();
+            bumpVersion();
         }
     }
 
@@ -161,7 +192,7 @@ public class CaptureManager extends SavedData {
         var existing = points.get(name);
         if (existing != null) {
             points.put(name, existing.withRadius(radius));
-            setDirty();
+            bumpVersion();
         }
     }
 
@@ -169,7 +200,7 @@ public class CaptureManager extends SavedData {
         var existing = points.get(name);
         if (existing != null) {
             points.put(name, existing.withDisplayColor(color));
-            setDirty();
+            bumpVersion();
         }
     }
 
@@ -177,18 +208,18 @@ public class CaptureManager extends SavedData {
         var existing = points.get(name);
         if (existing != null) {
             points.put(name, existing.withShowRange(showRange));
-            setDirty();
+            bumpVersion();
         }
     }
 
     public void createZone(String name, @Nullable String requiredZone) {
         zones.put(name, new ZoneEntry(name, new ArrayList<>(), requiredZone));
-        setDirty();
+        bumpVersion();
     }
 
     public void removeZone(String name) {
         zones.remove(name);
-        setDirty();
+        bumpVersion();
     }
 
     public void addPointToZone(String zoneName, String pointName) {
@@ -198,7 +229,7 @@ public class CaptureManager extends SavedData {
             if (!newList.contains(pointName)) {
                 newList.add(pointName);
                 zones.put(zoneName, new ZoneEntry(zone.name(), newList, zone.requiredZone()));
-                setDirty();
+                bumpVersion();
             }
         }
     }
@@ -209,7 +240,7 @@ public class CaptureManager extends SavedData {
             var newList = new ArrayList<>(zone.capturePoints());
             newList.remove(pointName);
             zones.put(zoneName, new ZoneEntry(zone.name(), newList, zone.requiredZone()));
-            setDirty();
+            bumpVersion();
         }
     }
 
@@ -224,7 +255,7 @@ public class CaptureManager extends SavedData {
         if (zone != null) {
             // 保留原有据点列表，仅修改区域依赖
             zones.put(zoneName, new ZoneEntry(zone.name(), new ArrayList<>(zone.capturePoints()), requiredZone));
-            setDirty();
+            bumpVersion();
         }
     }
 
@@ -275,6 +306,8 @@ public class CaptureManager extends SavedData {
         }
         tag.put("zones", zonesList);
 
+        tag.putLong(TAG_VERSION, version);
+
         return tag;
     }
 
@@ -294,6 +327,8 @@ public class CaptureManager extends SavedData {
             zones.put(entry.name(), entry);
         }
 
-        LOGGER.info("Loaded {} capture points and {} zones", points.size(), zones.size());
+        version = tag.contains(TAG_VERSION, Tag.TAG_LONG) ? tag.getLong(TAG_VERSION) : 0;
+
+        LOGGER.info("Loaded {} capture points, {} zones (version {})", points.size(), zones.size(), version);
     }
 }

@@ -1,2 +1,8 @@
 {
+  "itemGroup.attack_defense_capture_point_xkmxz": "攻防战占领点",
+  "block.attack_defense_capture_point_xkmxz.capture_point_block": "据点方块",
+  "gui.attack_defense_capture_point_xkmxz.capture_point.title": "据点",
+  "gui.attack_defense_capture_point_xkmxz.capture_point.info": "这是一个用于测试据点方块的 GUI。",
+  "gui.attack_defense_capture_point_xkmxz.capture_point.test_button": "测试按钮",
+  "gui.attack_defense_capture_point_xkmxz.capture_point.button_clicked": "按钮被点击了！"
 }

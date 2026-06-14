@@ -1,2 +1,8 @@
 {
+  "itemGroup.attack_defense_capture_point_xkmxz": "Attack Defense Capture Point",
+  "block.attack_defense_capture_point_xkmxz.capture_point_block": "Capture Point Block",
+  "gui.attack_defense_capture_point_xkmxz.capture_point.title": "Capture Point",
+  "gui.attack_defense_capture_point_xkmxz.capture_point.info": "This is a test GUI for the capture point block.",
+  "gui.attack_defense_capture_point_xkmxz.capture_point.test_button": "Test Button",
+  "gui.attack_defense_capture_point_xkmxz.capture_point.button_clicked": "Button was clicked!"
 }

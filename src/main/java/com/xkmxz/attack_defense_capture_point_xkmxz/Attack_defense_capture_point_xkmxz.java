@@ -1,19 +1,31 @@
 package com.xkmxz.attack_defense_capture_point_xkmxz;
 
+import com.xkmxz.attack_defense_capture_point_xkmxz.block.CapturePointBlock;
+import com.xkmxz.attack_defense_capture_point_xkmxz.block.entity.CapturePointBlockEntity;
 import net.minecraft.core.registries.Registries;
+import net.minecraft.network.chat.Component;
+import net.minecraft.world.item.BlockItem;
 import net.minecraft.world.item.CreativeModeTab;
+import net.minecraft.world.item.CreativeModeTabs;
+import net.minecraft.world.item.Item;
+import net.minecraft.world.level.block.Block;
+import net.minecraft.world.level.block.entity.BlockEntityType;
+import net.minecraft.world.level.block.state.BlockBehaviour;
 import net.neoforged.api.distmarker.Dist;
 import net.neoforged.bus.api.IEventBus;
 import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.ModContainer;
 import net.neoforged.fml.common.EventBusSubscriber;
 import net.neoforged.fml.common.Mod;
+import net.neoforged.fml.config.ModConfig;
 import net.neoforged.fml.event.lifecycle.FMLClientSetupEvent;
 import net.neoforged.fml.event.lifecycle.FMLCommonSetupEvent;
-import net.neoforged.fml.config.ModConfig;
 import net.neoforged.neoforge.common.NeoForge;
 import net.neoforged.neoforge.event.BuildCreativeModeTabContentsEvent;
 import net.neoforged.neoforge.event.server.ServerStartingEvent;
+import net.neoforged.neoforge.registries.DeferredBlock;
+import net.neoforged.neoforge.registries.DeferredHolder;
+import net.neoforged.neoforge.registries.DeferredItem;
 import net.neoforged.neoforge.registries.DeferredRegister;
 
 @Mod(Attack_defense_capture_point_xkmxz.MODID)
@@ -24,6 +36,31 @@ public class Attack_defense_capture_point_xkmxz {
     public static final DeferredRegister.Blocks BLOCKS = DeferredRegister.createBlocks(MODID);
     public static final DeferredRegister.Items ITEMS = DeferredRegister.createItems(MODID);
     public static final DeferredRegister<CreativeModeTab> CREATIVE_MODE_TABS = DeferredRegister.create(Registries.CREATIVE_MODE_TAB, MODID);
+    public static final DeferredRegister<BlockEntityType<?>> BLOCK_ENTITIES = DeferredRegister.create(Registries.BLOCK_ENTITY_TYPE, MODID);
+
+    public static final DeferredBlock<CapturePointBlock> CAPTURE_POINT_BLOCK = BLOCKS.register("capture_point_block",
+            () -> new CapturePointBlock(BlockBehaviour.Properties.of()
+                    .strength(3.0f, 6.0f)
+                    .requiresCorrectToolForDrops()));
+
+    public static final DeferredItem<BlockItem> CAPTURE_POINT_BLOCK_ITEM = ITEMS.registerSimpleBlockItem("capture_point_block", CAPTURE_POINT_BLOCK);
+
+    public static final DeferredHolder<BlockEntityType<?>, BlockEntityType<CapturePointBlockEntity>> CAPTURE_POINT_BE = BLOCK_ENTITIES.register("capture_point_block",
+            () -> {
+                var type = BlockEntityType.Builder.of(CapturePointBlockEntity::new, CAPTURE_POINT_BLOCK.get()).build(null);
+                CapturePointBlockEntity.TYPE = type;
+                return type;
+            });
+
+    public static final DeferredHolder<CreativeModeTab, CreativeModeTab> CREATIVE_TAB = CREATIVE_MODE_TABS.register("tab",
+            () -> CreativeModeTab.builder()
+                    .title(Component.translatable("itemGroup." + MODID))
+                    .withTabsBefore(CreativeModeTabs.SPAWN_EGGS)
+                    .icon(() -> CAPTURE_POINT_BLOCK_ITEM.get().getDefaultInstance())
+                    .displayItems((params, output) -> {
+                        output.accept(CAPTURE_POINT_BLOCK_ITEM.get());
+                    })
+                    .build());
 
     public Attack_defense_capture_point_xkmxz(IEventBus modEventBus, ModContainer modContainer) {
         modEventBus.addListener(this::commonSetup);
@@ -31,6 +68,7 @@ public class Attack_defense_capture_point_xkmxz {
         BLOCKS.register(modEventBus);
         ITEMS.register(modEventBus);
         CREATIVE_MODE_TABS.register(modEventBus);
+        BLOCK_ENTITIES.register(modEventBus);
 
         NeoForge.EVENT_BUS.register(this);
 
@@ -43,13 +81,16 @@ public class Attack_defense_capture_point_xkmxz {
     }
 
     private void addCreative(BuildCreativeModeTabContentsEvent event) {
+        if (event.getTabKey() == CreativeModeTabs.FUNCTIONAL_BLOCKS) {
+            event.accept(CAPTURE_POINT_BLOCK_ITEM);
+        }
     }
 
     @SubscribeEvent
     public void onServerStarting(ServerStartingEvent event) {
     }
 
-    @EventBusSubscriber(modid = MODID, bus = EventBusSubscriber.Bus.MOD, value = Dist.CLIENT)
+    @EventBusSubscriber(modid = MODID, value = Dist.CLIENT)
     public static class ClientModEvents {
         @SubscribeEvent
         public static void onClientSetup(FMLClientSetupEvent event) {

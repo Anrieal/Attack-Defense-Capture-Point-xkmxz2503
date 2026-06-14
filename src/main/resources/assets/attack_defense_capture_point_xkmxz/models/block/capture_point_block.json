@@ -1,0 +1,6 @@
+{
+  "parent": "minecraft:block/cube_all",
+  "textures": {
+    "all": "attack_defense_capture_point_xkmxz:block/capture_point_block"
+  }
+}

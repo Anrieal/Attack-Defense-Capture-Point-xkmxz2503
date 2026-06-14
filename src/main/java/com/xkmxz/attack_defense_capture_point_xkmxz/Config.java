@@ -12,7 +12,7 @@ import java.util.List;
 import java.util.Set;
 import java.util.stream.Collectors;
 
-@EventBusSubscriber(modid = Attack_defense_capture_point_xkmxz.MODID, bus = EventBusSubscriber.Bus.MOD)
+@EventBusSubscriber(modid = Attack_defense_capture_point_xkmxz.MODID)
 public class Config {
     private static final ModConfigSpec.Builder BUILDER = new ModConfigSpec.Builder();
 

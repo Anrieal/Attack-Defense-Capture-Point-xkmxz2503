@@ -10,6 +10,9 @@ group = mod_group_id
 
 repositories {
     mavenLocal()
+    maven {
+        url "https://maven.firstdark.dev/snapshots"
+    }
 }
 
 base {
@@ -111,7 +114,7 @@ dependencies {
     implementation files("libs/[输入法冲突修复] IMBlocker-5.5.4-neoforge+1.20.6-1.21.8.jar")
     implementation files("libs/[Xaero的世界地图] xaeroworldmap-neoforge-1.21.1-1.41.0.jar")
     implementation files("libs/[Xaero的小地图] xaerominimap-neoforge-1.21.1-26.1.0.jar")
-    implementation files("libs/ldlib2-neoforge-1.21.1-2.2.17-all.jar")
+    implementation "com.lowdragmc.ldlib2:ldlib2-neoforge-${minecraft_version}:${ldlib2_version}:all"
 
 
     // For more info:

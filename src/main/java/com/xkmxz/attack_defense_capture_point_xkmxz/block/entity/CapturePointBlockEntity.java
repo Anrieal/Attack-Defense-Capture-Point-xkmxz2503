@@ -10,6 +10,7 @@ import com.lowdragmc.lowdraglib2.gui.ui.elements.Label;
 import com.lowdragmc.lowdraglib2.gui.ui.elements.TextField;
 import com.lowdragmc.lowdraglib2.gui.ui.styletemplate.Sprites;
 import com.mojang.logging.LogUtils;
+import com.xkmxz.attack_defense_capture_point_xkmxz.manager.CaptureManager;
 import com.xkmxz.attack_defense_capture_point_xkmxz.manager.ICaptureDataAccess;
 import com.xkmxz.attack_defense_capture_point_xkmxz.network.BlockEntityActionPayload;
 import com.xkmxz.attack_defense_capture_point_xkmxz.nodegraph.CapturePointGraphScreen;
@@ -378,7 +379,7 @@ public class CapturePointBlockEntity extends BlockEntity {
         setChanged();
 
         // 发送网络包到服务端创建据点（服务端处理后会同步数据回来）
-        sendAction("create_point_at", name + "," + pos.getX() + "," + pos.getY() + "," + pos.getZ() + "," + radius);
+        sendAction("create_point_at", name + "," + pos.getX() + "," + pos.getY() + "," + pos.getZ() + "," + CaptureManager.CapturePointEntry.DEFAULT_RADIUS);
 
         ToastNotification.push(ToastNotification.Type.SUCCESS,
                 Component.translatable("toast.capture_point_block.created", name));
@@ -456,11 +457,7 @@ public class CapturePointBlockEntity extends BlockEntity {
                             return;
                         }
 
-                        // 乐观更新本地缓存（稍后服务端会同步回准确值）
-                        radius = newRadius;
-                        setChanged();
-
-                        // 发送网络包
+                        // 发送网络包到服务端修改据点半径（服务端处理后会经过 syncFromManager 同步回来）
                         if (!boundPointName.isEmpty()) {
                             sendAction("set_radius", boundPointName + "," + newRadius);
                         }
@@ -481,14 +478,13 @@ public class CapturePointBlockEntity extends BlockEntity {
      * 通过网络包发送到服务端处理。
      */
     private void funcToggleShowRange(Minecraft mc) {
-        showRange = !showRange;
-        setChanged();
+        boolean newShow = !showRange; // 计算期望的新状态，但不下写到本地缓存，由服务端同步回来
 
         if (!boundPointName.isEmpty()) {
-            sendAction("toggle_range", boundPointName + "," + showRange);
+            sendAction("toggle_range", boundPointName + "," + newShow);
         }
 
-        if (showRange) {
+        if (newShow) {
             openColorPickerDialog();
         } else {
             ToastNotification.push(ToastNotification.Type.SUCCESS,
@@ -669,11 +665,7 @@ public class CapturePointBlockEntity extends BlockEntity {
                             .backgroundTexture(new ColorRectTexture(color)));
             int selectedColor = color;
             colorBtn.addEventListener(com.lowdragmc.lowdraglib2.gui.ui.event.UIEvents.MOUSE_DOWN, ev -> {
-                // 乐观更新本地缓存
-                displayColor = selectedColor;
-                setChanged();
-
-                // 通过网络包同步到服务端
+                // 通过网络包同步到服务端（不直接修改本地缓存，由 syncFromManager 同步回来）
                 if (!boundPointName.isEmpty()) {
                     sendAction("set_color", boundPointName + "," + selectedColor);
                 }
@@ -703,8 +695,6 @@ public class CapturePointBlockEntity extends BlockEntity {
         var disableBtn = new Button().setText(Component.translatable("gui.capture_point_block.dialog.disable_range"));
         disableBtn.layout(l -> l.flex(1).heightPercent(100));
         disableBtn.setOnClick(e -> {
-            showRange = false;
-            setChanged();
             if (!boundPointName.isEmpty()) {
                 sendAction("toggle_range", boundPointName + ",false");
             }

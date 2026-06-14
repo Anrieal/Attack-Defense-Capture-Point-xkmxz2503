@@ -123,8 +123,9 @@ public record BlockEntityActionPayload(
                 }
                 case "block_unbind" -> {
                     // 仅清除方块实体的绑定，不删除服务端据点
-                    String name = parts[0];
-                    // 在 BE 上清除绑定名
+                    if (serverLevel.getBlockEntity(payload.blockPos()) instanceof CapturePointBlockEntity be) {
+                        be.setBoundPointNameFromServer("");
+                    }
                 }
             }
 

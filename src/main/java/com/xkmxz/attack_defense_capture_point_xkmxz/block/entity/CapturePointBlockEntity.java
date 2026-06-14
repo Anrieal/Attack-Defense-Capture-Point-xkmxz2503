@@ -9,7 +9,8 @@ import com.lowdragmc.lowdraglib2.gui.ui.elements.Button;
 import com.lowdragmc.lowdraglib2.gui.ui.elements.Label;
 import com.lowdragmc.lowdraglib2.gui.ui.elements.TextField;
 import com.lowdragmc.lowdraglib2.gui.ui.styletemplate.Sprites;
-import com.xkmxz.attack_defense_capture_point_xkmxz.manager.CaptureManager;
+import com.mojang.logging.LogUtils;
+import com.xkmxz.attack_defense_capture_point_xkmxz.manager.ICaptureDataAccess;
 import com.xkmxz.attack_defense_capture_point_xkmxz.network.BlockEntityActionPayload;
 import com.xkmxz.attack_defense_capture_point_xkmxz.nodegraph.CapturePointGraphScreen;
 import com.xkmxz.attack_defense_capture_point_xkmxz.nodegraph.ToastNotification;
@@ -20,24 +21,48 @@ import net.minecraft.nbt.CompoundTag;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.entity.player.Player;
+import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.entity.BlockEntityType;
 import net.minecraft.world.level.block.state.BlockState;
+import org.slf4j.Logger;
 
 import java.util.function.Consumer;
 
+/**
+ * 据点方块实体 — 绑定一个据点并展示其范围轮廓。
+ * <p>
+ * <b>持久化策略</b>：仅持久化 {@link #boundPointName}（方块与据点的绑定关系）。
+ * radius / displayColor / showRange 不持久化，而是从 {@link ICaptureDataAccess} 实时同步，
+ * 以 CaptureManager 为唯一数据源，避免数据冲突。
+ * <p>
+ * <b>实时同步</b>：服务端通过 {@link #syncFromManager()} 从 CaptureManager 同步最新数据，
+ * 然后通过 {@link #getUpdateTag}/{@link #handleUpdateTag} 网络同步到客户端渲染层。
+ * <p>
+ * 写入操作：客户端 UI → {@link #sendAction} → {@link BlockEntityActionPayload} → 服务端处理 →
+ * 更新 CaptureManager → 回调该 BE {@link #syncFromManager()} → 同步到客户端。
+ */
 public class CapturePointBlockEntity extends BlockEntity {
+
+    private static final Logger LOGGER = LogUtils.getLogger();
 
     public static BlockEntityType<CapturePointBlockEntity> TYPE;
 
-    // ---- 持久化数据 ----
-    // boundPointName 是方块与据点的绑定关系（唯一真正的本地数据）
-    private String boundPointName = "";       // 绑定的据点名称（空=未绑定）
+    // ================================================================
+    //  持久化数据 — 仅 boundPointName 是方块的"本地"数据
+    // ================================================================
 
-    // ---- 本地缓存（从 CaptureManager 同步，用于客户端渲染） ----
-    private double radius = 5.0;              // 据点半径
-    private int displayColor = 0xFFFF4444;    // 显示颜色（ARGB，默认红色）
-    private boolean showRange = false;        // 是否显示范围轮廓
+    /** 绑定的据点名称（空字符串 = 未绑定） */
+    private String boundPointName = "";
+
+    // ================================================================
+    //  渲染缓存 — 从 CaptureManager 同步，不持久化到磁盘
+    //  仅通过 getUpdateTag()/handleUpdateTag() 做网络同步
+    // ================================================================
+
+    private double radius = 5.0;
+    private int displayColor = 0xFFFF4444;
+    private boolean showRange = false;
 
     // ---- NBT 键名 ----
     private static final String TAG_BOUND_POINT = "boundPointName";
@@ -49,92 +74,150 @@ public class CapturePointBlockEntity extends BlockEntity {
         super(TYPE, pos, blockState);
     }
 
-    // ---- NBT 持久化 ----
+    // ================================================================
+    //  NBT 持久化（磁盘 → 仅持久化绑定名）
+    // ================================================================
 
     @Override
     protected void saveAdditional(CompoundTag tag, HolderLookup.Provider registries) {
         super.saveAdditional(tag, registries);
         tag.putString(TAG_BOUND_POINT, boundPointName);
-        tag.putDouble(TAG_RADIUS, radius);
-        tag.putInt(TAG_DISPLAY_COLOR, displayColor);
-        tag.putBoolean(TAG_SHOW_RANGE, showRange);
     }
 
     @Override
     protected void loadAdditional(CompoundTag tag, HolderLookup.Provider registries) {
         super.loadAdditional(tag, registries);
         boundPointName = tag.contains(TAG_BOUND_POINT) ? tag.getString(TAG_BOUND_POINT) : "";
+    }
+
+    // ================================================================
+    //  网络同步（服务端→客户端）
+    //  服务端在 getUpdateTag 中将渲染数据写入 NBT，
+    //  客户端在 handleUpdateTag 中读取并以本地缓存用于渲染。
+    // ================================================================
+
+    @Override
+    public CompoundTag getUpdateTag(HolderLookup.Provider registries) {
+        var tag = super.getUpdateTag(registries);
+        // 写入当前渲染数据（服务端调用时已经通过 syncFromManager 从 CaptureManager 同步了最新值）
+        tag.putString(TAG_BOUND_POINT, boundPointName);
+        tag.putDouble(TAG_RADIUS, radius);
+        tag.putInt(TAG_DISPLAY_COLOR, displayColor);
+        tag.putBoolean(TAG_SHOW_RANGE, showRange);
+        return tag;
+    }
+
+    @Override
+    public void handleUpdateTag(CompoundTag tag, HolderLookup.Provider registries) {
+        super.handleUpdateTag(tag, registries);
+        boundPointName = tag.contains(TAG_BOUND_POINT) ? tag.getString(TAG_BOUND_POINT) : "";
         radius = tag.contains(TAG_RADIUS) ? tag.getDouble(TAG_RADIUS) : 5.0;
         displayColor = tag.contains(TAG_DISPLAY_COLOR) ? tag.getInt(TAG_DISPLAY_COLOR) : 0xFFFF4444;
         showRange = tag.contains(TAG_SHOW_RANGE) && tag.getBoolean(TAG_SHOW_RANGE);
     }
 
-    // ---- Getter（仅提供读取，修改通过网络包发送到服务端） ----
+    // ================================================================
+    //  生命週期回调
+    // ================================================================
+
+    @Override
+    public void onLoad() {
+        super.onLoad();
+        // 服务端：从 CaptureManager 同步最新数据到本地缓存
+        if (level != null && !level.isClientSide && !boundPointName.isEmpty()) {
+            syncFromManager();
+        }
+    }
+
+    // ================================================================
+    //  Getter（仅供渲染器使用）
+    // ================================================================
 
     public String getBoundPointName() { return boundPointName; }
     public double getRadius() { return radius; }
     public int getDisplayColor() { return displayColor; }
     public boolean isShowRange() { return showRange; }
 
-    /** 同步数据到客户端（仅服务端调用） */
-    private void syncToClient() {
-        if (level != null && !level.isClientSide) {
-            level.sendBlockUpdated(worldPosition, getBlockState(), getBlockState(), 3);
+    // ================================================================
+    //  服务端同步引擎
+    // ================================================================
+
+    /**
+     * 【服务端调用】从 CaptureManager 同步绑定据点的最新数据到本地缓存，
+     * 如果有变化则同步到客户端。
+     * <p>
+     * 当 CaptureManager 中的数据被命令/GUI/其他方块修改后，
+     * 应调用此方法使该方块实体反映最新数据。
+     */
+    public void syncFromManager() {
+        if (level == null || level.isClientSide) return;
+        if (boundPointName.isEmpty()) return;
+
+        var access = getServerDataAccess();
+        if (access == null) return;
+
+        var entry = access.getPoint(boundPointName);
+        if (entry == null) {
+            // 绑定的据点已被删除
+            LOGGER.warn("Bound point '{}' no longer exists, unbinding BE at {}", boundPointName, worldPosition);
+            boundPointName = "";
+            setChanged();
+            syncToClient();
+            return;
+        }
+
+        boolean changed = false;
+        if (radius != entry.radius()) { radius = entry.radius(); changed = true; }
+        if (displayColor != entry.displayColor()) { displayColor = entry.displayColor(); changed = true; }
+        if (showRange != entry.showRange()) { showRange = entry.showRange(); changed = true; }
+
+        if (changed) {
+            setChanged();
+            syncToClient();
         }
     }
 
     /**
-     * 设置绑定名并同步到客户端（仅在服务端调用）。
-     * 客户端UI请使用网络包通信。
+     * 【服务端调用】设置绑定名并同步到 CaptureManager 和客户端。
      */
     public void setBoundPointNameFromServer(String name) {
-        this.boundPointName = name;
-        setChanged();
-        syncToClient();
-    }
-
-    /**
-     * 从服务端更新本地缓存数据（由 CaptureManager 变更后调用）。
-     */
-    public void updateCacheFromServer(double newRadius, int newColor, boolean newShowRange) {
-        this.radius = newRadius;
-        this.displayColor = newColor;
-        this.showRange = newShowRange;
+        this.boundPointName = name != null ? name : "";
+        // 同步渲染数据
+        syncFromManager();
         setChanged();
         syncToClient();
     }
 
     // ================================================================
-    //  网络包通信辅助方法
+    //  同步辅助
+    // ================================================================
+
+    /** 发送方块更新包到客户端（仅服务端调用） */
+    private void syncToClient() {
+        if (level != null && !level.isClientSide) {
+            level.sendBlockUpdated(worldPosition, getBlockState(), getBlockState(), Block.UPDATE_ALL);
+        }
+    }
+
+    /** 获取服务端统一数据访问接口 */
+    private ICaptureDataAccess getServerDataAccess() {
+        if (level instanceof ServerLevel sl) {
+            return ICaptureDataAccess.server(sl);
+        }
+        return null;
+    }
+
+    // ================================================================
+    //  网络包通信
     // ================================================================
 
     /**
      * 通过网络包发送方块操作到服务端。
      * 客户端→服务端严格分离，不直接访问 CaptureManager。
-     *
-     * @param action 操作类型
-     * @param data   操作数据（逗号分隔）
      */
     private void sendAction(String action, String data) {
         net.neoforged.neoforge.network.PacketDistributor.sendToServer(
                 new BlockEntityActionPayload(worldPosition, action, data));
-    }
-
-    /**
-     * 获取服务端 CaptureManager（仅限读取/单机回退）。
-     * 警告：此方法仅在单机/内嵌服务端模式下可用，
-     * 专用服务器模式下返回 null。
-     * 所有写入操作必须通过 sendAction() 网络包实现。
-     */
-    private CaptureManager getServerCaptureManager() {
-        if (level instanceof ServerLevel sl) {
-            return CaptureManager.get(sl);
-        }
-        var mc = Minecraft.getInstance();
-        if (mc.hasSingleplayerServer() && mc.getSingleplayerServer() != null) {
-            return CaptureManager.get(mc.getSingleplayerServer().getLevel(level.dimension()));
-        }
-        return null;
     }
 
     // ================================================================
@@ -142,27 +225,22 @@ public class CapturePointBlockEntity extends BlockEntity {
     // ================================================================
 
     public void openUI(Player player) {
-        if (level == null || level.isClientSide) {
+        if (level != null && level.isClientSide) {
             openMenuScreen();
         }
     }
 
-    /**
-     * 创建并显示方块功能菜单屏幕。
-     * 自动缩放：宽度取屏幕 40%（最大 260px），高度按内容紧凑计算，居中显示。
-     */
+    /** 创建并显示方块功能菜单屏幕。自适应宽度：屏幕 40%，最大 260px。 */
     private void openMenuScreen() {
         var mc = Minecraft.getInstance();
         var win = mc.getWindow();
         int scw = win.getGuiScaledWidth();
 
-        // 自适应宽度：屏幕 40% 但不超过 260px
         int panelW = Math.min(scw * 40 / 100, 260);
-        // 紧凑尺寸
         int btnH = 22;
         int gap = 3;
-        int titleH = 14;  // 标题行高
-        int statusH = 12; // 绑定状态行高
+        int titleH = 14;
+        int statusH = 12;
         int bottomH = 20;
         int pad = 6;
         int panelH = pad + titleH + statusH + gap + 6 * (btnH + gap) + bottomH + pad;
@@ -176,7 +254,6 @@ public class CapturePointBlockEntity extends BlockEntity {
                 .style(s -> s.background(Sprites.BORDER)
                         .backgroundTexture(new ColorRectTexture(bg)));
 
-        // ---- 标题区域：标题在上，绑定状态在下 ----
         var titleLabel = new Label().setText(Component.translatable("gui.capture_point_block.menu.title"));
         titleLabel.layout(l -> l.widthPercent(100).height(titleH));
         titleLabel.textStyle(s -> s.fontSize(10.0f).textColor(0xFFAAAAAA));
@@ -188,7 +265,6 @@ public class CapturePointBlockEntity extends BlockEntity {
         boundLabel.textStyle(s -> s.fontSize(9.0f).textColor(0xFF888888));
         root.addChildren(boundLabel);
 
-        // ---- 功能按钮（紧凑） ----
         root.addChildren(createFuncButton(btnBg, btnH,
                 "gui.capture_point_block.func1", this::funcCreatePoint));
         root.addChildren(createFuncButton(btnBg, btnH,
@@ -202,7 +278,7 @@ public class CapturePointBlockEntity extends BlockEntity {
         root.addChildren(createFuncButton(btnBg, btnH,
                 "gui.capture_point_block.func6", () -> funcRemoveBinding(mc)));
 
-        // ---- 底部按钮行（紧凑） ----
+        // 底部按钮行
         var bottomRow = new UIElement()
                 .layout(l -> l.widthPercent(100).height(bottomH)
                         .flexDirection(dev.vfyjxf.taffy.style.FlexDirection.ROW).gapAll(3));
@@ -218,7 +294,6 @@ public class CapturePointBlockEntity extends BlockEntity {
         bottomRow.addChildren(openGraphBtn, closeBtn);
         root.addChildren(bottomRow);
 
-        // 居中容器
         var wrap = new UIElement()
                 .layout(l -> l.widthPercent(100).heightPercent(100).paddingAll(0).gapAll(0)
                         .justifyContent(dev.vfyjxf.taffy.style.AlignContent.CENTER)
@@ -249,12 +324,12 @@ public class CapturePointBlockEntity extends BlockEntity {
     }
 
     // ================================================================
-    //  6 个功能实现 — 全部通过网络包通信，禁止直接访问服务端 CaptureManager
+    //  6 个功能实现 — 全部通过网络包通信
     // ================================================================
 
     /**
-     * 功能1: 以据点方块坐标为中心创建并绑定据点。
-     * 通过网络包发送到服务端处理。
+     * 功能1: 以方块坐标创建据点并绑定。
+     * 生成唯一名称 → 乐观更新本地绑定名 → 发送网络包到服务端。
      */
     private void funcCreatePoint() {
         if (!boundPointName.isEmpty()) {
@@ -265,14 +340,13 @@ public class CapturePointBlockEntity extends BlockEntity {
         }
 
         var pos = worldPosition;
-        // 生成默认名称：capture_<x>_<y>_<z>
         String name = "capture_" + pos.getX() + "_" + pos.getY() + "_" + pos.getZ();
 
-        // 乐观更新：先设置本地绑定名
+        // 乐观更新本地绑定名
         boundPointName = name;
         setChanged();
 
-        // 发送网络包到服务端创建据点
+        // 发送网络包到服务端创建据点（服务端处理后会同步数据回来）
         sendAction("create_point_at", name + "," + pos.getX() + "," + pos.getY() + "," + pos.getZ() + "," + radius);
 
         ToastNotification.push(ToastNotification.Type.SUCCESS,
@@ -281,9 +355,8 @@ public class CapturePointBlockEntity extends BlockEntity {
     }
 
     /**
-     * 功能2: 将已绑定的据点绑定到区域。
+     * 功能2: 将绑定的据点绑定到区域。
      * 弹出区域选择对话框。
-     * 注意：区域列表需要服务端数据，专用服务器模式下可能不可用。
      */
     private void funcBindZone() {
         if (boundPointName.isEmpty()) {
@@ -292,13 +365,12 @@ public class CapturePointBlockEntity extends BlockEntity {
             reopenMenu();
             return;
         }
-
         openZoneSelectDialog();
     }
 
     /**
      * 功能3: 查看据点状态。
-     * 使用本地缓存数据展示；完整状态信息（所属、区域）需要服务端数据。
+     * 使用本地缓存数据展示。
      */
     private void funcViewStatus() {
         if (boundPointName.isEmpty()) {
@@ -308,7 +380,6 @@ public class CapturePointBlockEntity extends BlockEntity {
             return;
         }
 
-        // 优先显示本地缓存数据（始终可用）
         ToastNotification.push(ToastNotification.Type.INFO,
                 Component.translatable("toast.capture_point_block.status_name", boundPointName));
         ToastNotification.push(ToastNotification.Type.INFO,
@@ -317,12 +388,14 @@ public class CapturePointBlockEntity extends BlockEntity {
         ToastNotification.push(ToastNotification.Type.INFO,
                 Component.translatable("toast.capture_point_block.status_radius", (int) radius));
         ToastNotification.push(ToastNotification.Type.INFO,
-                Component.translatable("toast.capture_point_block.status_range", showRange ? "ON" : "OFF"));
+                Component.translatable("toast.capture_point_block.status_range",
+                        showRange ? Component.translatable("gui.capture_point_graph.dialog.advanced_config.toggle.on").getString()
+                                  : Component.translatable("gui.capture_point_graph.dialog.advanced_config.toggle.off").getString()));
 
         // 尝试获取服务端补充数据（仅单机可用）
-        var mgr = getServerCaptureManager();
+        var mgr = getServerDataAccess();
         if (mgr != null) {
-            var entry = mgr.getPoints().get(boundPointName);
+            var entry = mgr.getPoint(boundPointName);
             if (entry != null) {
                 String owner = entry.owner() != null ? entry.owner() : "none";
                 ToastNotification.push(ToastNotification.Type.INFO,
@@ -352,11 +425,11 @@ public class CapturePointBlockEntity extends BlockEntity {
                             return;
                         }
 
-                        // 更新本地缓存
+                        // 乐观更新本地缓存（稍后服务端会同步回准确值）
                         radius = newRadius;
                         setChanged();
 
-                        // 如果已绑定据点，发送网络包到服务端
+                        // 发送网络包
                         if (!boundPointName.isEmpty()) {
                             sendAction("set_radius", boundPointName + "," + newRadius);
                         }
@@ -377,11 +450,9 @@ public class CapturePointBlockEntity extends BlockEntity {
      * 通过网络包发送到服务端处理。
      */
     private void funcToggleShowRange(Minecraft mc) {
-        // 切换显示状态
         showRange = !showRange;
         setChanged();
 
-        // 通过网络包同步到服务端
         if (!boundPointName.isEmpty()) {
             sendAction("toggle_range", boundPointName + "," + showRange);
         }
@@ -397,7 +468,6 @@ public class CapturePointBlockEntity extends BlockEntity {
 
     /**
      * 功能6: 移除绑定 — 打开子菜单选择操作。
-     * 通过网络包发送到服务端处理。
      */
     private void funcRemoveBinding(Minecraft mc) {
         if (boundPointName.isEmpty()) {
@@ -407,7 +477,7 @@ public class CapturePointBlockEntity extends BlockEntity {
             return;
         }
 
-        int dw = 260, dh = 110;
+        int dw = 260, dh = 130;
         var root = new UIElement()
                 .layout(l -> l.width(dw).height(dh).paddingAll(10).gapAll(6)
                         .flexDirection(dev.vfyjxf.taffy.style.FlexDirection.COLUMN))
@@ -418,10 +488,14 @@ public class CapturePointBlockEntity extends BlockEntity {
         title.layout(l -> l.widthPercent(100).heightAuto());
         root.addChildren(title);
 
+        // 选项1: 仅清除方块绑定（不删除服务端据点）
         var unbindBlockBtn = new Button().setText(Component.translatable("gui.capture_point_block.dialog.unbind.block"));
         unbindBlockBtn.layout(l -> l.widthPercent(100).height(24));
         unbindBlockBtn.setOnClick(e -> {
-            // 仅清除方块实体的绑定，不删除服务端据点
+            // 发送网络包清除服务端的绑定状态
+            String currentName = boundPointName;
+            sendAction("block_unbind", currentName);
+            // 乐观更新本地状态
             boundPointName = "";
             setChanged();
             ToastNotification.push(ToastNotification.Type.SUCCESS,
@@ -431,11 +505,11 @@ public class CapturePointBlockEntity extends BlockEntity {
         });
         root.addChildren(unbindBlockBtn);
 
+        // 选项2: 从区域中移除据点
         var unbindZoneBtn = new Button().setText(Component.translatable("gui.capture_point_block.dialog.unbind.zone"));
         unbindZoneBtn.layout(l -> l.widthPercent(100).height(24));
         unbindZoneBtn.setOnClick(e -> {
             String currentName = boundPointName;
-            // 发送网络包到服务端处理
             sendAction("remove_from_zone", currentName);
             ToastNotification.push(ToastNotification.Type.SUCCESS,
                     Component.translatable("toast.capture_point_block.unbind_zone", currentName));
@@ -444,6 +518,7 @@ public class CapturePointBlockEntity extends BlockEntity {
         });
         root.addChildren(unbindZoneBtn);
 
+        // 选项3: 取消
         var cancelBtn = new Button().setText(Component.translatable("gui.capture_point_graph.dialog.cancel"));
         cancelBtn.layout(l -> l.widthPercent(100).height(20));
         cancelBtn.setOnClick(e -> {
@@ -459,24 +534,19 @@ public class CapturePointBlockEntity extends BlockEntity {
 
     // ================================================================
     //  区域选择对话框
-    //  注意：区域列表需要服务端数据。
-    //  单机模式下通过 getServerCaptureManager() 读取，
-    //  专用服务器模式下不可用，请使用 /capturepoint 命令。
     // ================================================================
 
     private void openZoneSelectDialog() {
         var mc = Minecraft.getInstance();
-
-        // 尝试获取区域列表（仅单机可用）
-        var mgr = getServerCaptureManager();
-        if (mgr == null) {
+        var access = getServerDataAccess();
+        if (access == null) {
             ToastNotification.push(ToastNotification.Type.ERROR,
                     Component.translatable("toast.capture_point_block.server_only"));
             reopenMenu();
             return;
         }
 
-        var zones = mgr.getZones();
+        var zones = access.getZones();
         if (zones.isEmpty()) {
             ToastNotification.push(ToastNotification.Type.ERROR,
                     Component.translatable("toast.capture_point_block.no_zones"));
@@ -500,7 +570,6 @@ public class CapturePointBlockEntity extends BlockEntity {
             btn.layout(l -> l.widthPercent(100).height(28));
             String zoneName = entry.name();
             btn.setOnClick(e -> {
-                // 发送网络包到服务端
                 sendAction("add_to_zone", zoneName + "," + boundPointName);
                 ToastNotification.push(ToastNotification.Type.SUCCESS,
                         Component.translatable("toast.capture_point_block.bound_to_zone", boundPointName, zoneName));
@@ -527,7 +596,6 @@ public class CapturePointBlockEntity extends BlockEntity {
     //  颜色选择对话框
     // ================================================================
 
-    /** 预设颜色列表 */
     private static final int[] PRESET_COLORS = {
             0xFFFF4444, // 红
             0xFFFF9800, // 橙
@@ -557,7 +625,6 @@ public class CapturePointBlockEntity extends BlockEntity {
         title.layout(l -> l.widthPercent(100).heightAuto());
         root.addChildren(title);
 
-        // 颜色网格
         var grid = new UIElement()
                 .layout(l -> l.widthPercent(100).heightAuto()
                         .flexDirection(dev.vfyjxf.taffy.style.FlexDirection.ROW)
@@ -571,7 +638,7 @@ public class CapturePointBlockEntity extends BlockEntity {
                             .backgroundTexture(new ColorRectTexture(color)));
             int selectedColor = color;
             colorBtn.addEventListener(com.lowdragmc.lowdraglib2.gui.ui.event.UIEvents.MOUSE_DOWN, ev -> {
-                // 更新本地缓存
+                // 乐观更新本地缓存
                 displayColor = selectedColor;
                 setChanged();
 
@@ -589,12 +656,10 @@ public class CapturePointBlockEntity extends BlockEntity {
         }
         root.addChildren(grid);
 
-        // 底部提示
         var hint = new Label().setText(Component.translatable("gui.capture_point_block.dialog.color_picker.hint"));
         hint.layout(l -> l.widthPercent(100).heightAuto());
         root.addChildren(hint);
 
-        // 取消 & 关闭范围显示
         var btnRow = new UIElement()
                 .layout(l -> l.widthPercent(100).height(28)
                         .flexDirection(dev.vfyjxf.taffy.style.FlexDirection.ROW).gapAll(6));
@@ -626,7 +691,7 @@ public class CapturePointBlockEntity extends BlockEntity {
     }
 
     // ================================================================
-    //  输入对话框（通用）
+    //  通用输入对话框
     // ================================================================
 
     private void openInputDialog(Component titleText, Component labelText,

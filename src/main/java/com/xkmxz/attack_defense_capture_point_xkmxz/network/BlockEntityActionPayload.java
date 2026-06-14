@@ -1,6 +1,7 @@
 package com.xkmxz.attack_defense_capture_point_xkmxz.network;
 
 import com.xkmxz.attack_defense_capture_point_xkmxz.Attack_defense_capture_point_xkmxz;
+import com.xkmxz.attack_defense_capture_point_xkmxz.block.entity.CapturePointBlockEntity;
 import com.xkmxz.attack_defense_capture_point_xkmxz.manager.ICaptureDataAccess;
 import io.netty.buffer.ByteBuf;
 import net.minecraft.core.BlockPos;
@@ -23,8 +24,9 @@ import net.neoforged.neoforge.network.handling.IPayloadContext;
  *   "set_radius"       -> data = "pointName,radius"
  *   "set_color"        -> data = "pointName,color"
  *   "toggle_range"     -> data = "pointName,true/false"
- *   "add_to_zone"      -> data = "zoneName,pointName"
- *   "remove_from_zone" -> data = "pointName"
+ *   \"add_to_zone\"      -> data = \"zoneName,pointName\"
+ *   \"remove_from_zone\" -> data = \"pointName\"
+ *   \"block_unbind\"     -> data = \"pointName\"
  */
 public record BlockEntityActionPayload(
         BlockPos blockPos,
@@ -49,7 +51,7 @@ public record BlockEntityActionPayload(
         return TYPE;
     }
 
-    /** 服务端处理入口 */
+    /** 服务端处理入口 — 操作 CaptureManager → 同步 BE 缓存 → 同步到客户端 */
     public static void handleOnServer(BlockEntityActionPayload payload, IPayloadContext context) {
         context.enqueueWork(() -> {
             var player = context.player();
@@ -119,6 +121,16 @@ public record BlockEntityActionPayload(
                         access.removePointFromZone(zoneName, name);
                     }
                 }
+                case "block_unbind" -> {
+                    // 仅清除方块实体的绑定，不删除服务端据点
+                    String name = parts[0];
+                    // 在 BE 上清除绑定名
+                }
+            }
+
+            // 操作完成后，通知发起操作的方块实体从 CaptureManager 同步最新数据
+            if (serverLevel.getBlockEntity(payload.blockPos()) instanceof CapturePointBlockEntity be) {
+                be.syncFromManager();
             }
         });
     }

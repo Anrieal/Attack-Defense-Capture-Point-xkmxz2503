@@ -9,7 +9,8 @@ import net.minecraft.network.chat.Component;
 
 /**
  * 区域节点 - 代表一个占领区域。
- * 具有一个输入端口（point_in）接收来自 CapturePointNode 的连接，
+ * 具有一个输入端口（point_in）接收来自 CapturePointNode 的连接（表示"区域包含据点"），
+ * 一个输出端口（zone_out）连接到其他区域的依赖输入（表示"区域先后关系"），
  * 以及一个输入端口（required_zone）接收来自其他区域的依赖连接。
  */
 public class CaptureZoneNode extends Node {
@@ -53,6 +54,10 @@ public class CaptureZoneNode extends Node {
         // 输入端口 - 接收据点信号（多个据点可通过此端口加入区域）
         context.addInputPort("point_in", CapturePointTypes.POINT_SIGNAL)
                 .withDisplayName(Component.translatable("node.capture_zone.port.point_in"))
+                .build();
+        // 输出端口 - 发出区域信号（连接到其他区域的 required_zone 输入，表示区域先后关系）
+        context.addOutputPort("zone_out", CapturePointTypes.ZONE_SIGNAL)
+                .withDisplayName(Component.translatable("node.capture_zone.port.zone_out"))
                 .build();
         // 输入端口 - 接收区域依赖信号（该区域依赖的另一个区域）
         context.addInputPort("required_zone", CapturePointTypes.ZONE_SIGNAL)

@@ -103,7 +103,7 @@ public class CapturePointGraphScreen {
     }
 
     private void loadDataToGraph() {
-        // 从 CaptureManager 加载据点数据并创建对应的节点
+        // 从 CaptureManager 加载据点/区域数据并创建节点及连线
         try {
             var serverLevel = getServerLevel();
             if (serverLevel == null) return;
@@ -112,36 +112,33 @@ public class CapturePointGraphScreen {
             var points = manager.getPoints();
             var zones = manager.getZones();
 
+            if (points.isEmpty() && zones.isEmpty()) return;
+
+            // 存储 node model 名称到模型的映射，用于后续连线
+            var pointModels = new java.util.LinkedHashMap<String, com.lowdragmc.lowdraglib2.nodegraphtookit.model.node.NodeModel>();
+            var zoneModels = new java.util.LinkedHashMap<String, com.lowdragmc.lowdraglib2.nodegraphtookit.model.node.NodeModel>();
+
             float startX = 100;
             float startY = 100;
             float gapX = 220;
             float gapY = 120;
             int idx = 0;
 
-            // 为每个据点创建节点
+            // 创建据点节点
             for (var entry : points.values()) {
                 float x = startX + (idx % 4) * gapX;
                 float y = startY + (idx / 4) * gapY;
                 var node = new CapturePointNode();
                 var nodeModel = graph.graphModel.createNodeModel(node,
                         new org.joml.Vector2f(x, y));
-                // 设置名称和选项
                 nodeModel.setName(entry.name());
-                nodeModel.setTitle(Component.literal(entry.name()));
-                // 设置 owner 选项
-                var ownerOpt = nodeModel.getNodeOptionById("owner");
-                if (ownerOpt != null && entry.owner() != null) {
-                    // 设置实际值
-                }
-                // 设置位置信息
-                var posOpt = nodeModel.getNodeOptionById("position");
-                if (posOpt != null) {
-                    var posStr = entry.pos().getX() + ", " + entry.pos().getY() + ", " + entry.pos().getZ();
-                }
+                nodeModel.setTitle(net.minecraft.network.chat.Component.literal(entry.name()));
+                // owner 和 position 选项只读显示，在节点定义时已有默认值
+                pointModels.put(entry.name(), nodeModel);
                 idx++;
             }
 
-            // 为每个区域创建节点
+            // 创建区域节点
             for (var entry : zones.values()) {
                 float x = startX + 250;
                 float y = startY + ((idx - points.size()) % 3) * gapY + 100;
@@ -149,8 +146,53 @@ public class CapturePointGraphScreen {
                 var nodeModel = graph.graphModel.createNodeModel(node,
                         new org.joml.Vector2f(x, y));
                 nodeModel.setName(entry.name());
-                nodeModel.setTitle(Component.literal(entry.name()));
+                nodeModel.setTitle(net.minecraft.network.chat.Component.literal(entry.name()));
+                // captured / required_zone / points 选项只读显示，节点定义时已有默认值
+                zoneModels.put(entry.name(), nodeModel);
                 idx++;
+            }
+
+            // === 建立连线（反映"区域包含据点"和"区域前后关系"） ===
+
+            // 连线 1: 据点(point_signal 输出) → 区域(point_in 输入)
+            for (var zoneEntry : zones.values()) {
+                var zoneModel = zoneModels.get(zoneEntry.name());
+                if (zoneModel == null) continue;
+                var pointInPort = zoneModel.getInputsById().get("point_in");
+                if (pointInPort == null) continue;
+
+                for (var pointName : zoneEntry.capturePoints()) {
+                    var pointModel = pointModels.get(pointName);
+                    if (pointModel == null) continue;
+                    var signalPort = pointModel.getOutputsById().get("point_signal");
+                    if (signalPort == null) continue;
+
+                    try {
+                        graph.graphModel.createWire(signalPort, pointInPort);
+                    } catch (Exception ignored) {
+                        // 可能端口已连接，忽略
+                    }
+                }
+            }
+
+            // 连线 2: 前置区域(zone_out 输出) → 后置区域(required_zone 输入)
+            for (var zoneEntry : zones.values()) {
+                if (zoneEntry.requiredZone() == null || zoneEntry.requiredZone().isEmpty()) continue;
+
+                var zoneModel = zoneModels.get(zoneEntry.name());
+                if (zoneModel == null) continue;
+                var reqZoneInput = zoneModel.getInputsById().get("required_zone");
+                if (reqZoneInput == null) continue;
+
+                var requiredZoneModel = zoneModels.get(zoneEntry.requiredZone());
+                if (requiredZoneModel == null) continue;
+                var zoneOutPort = requiredZoneModel.getOutputsById().get("zone_out");
+                if (zoneOutPort == null) continue;
+
+                try {
+                    graph.graphModel.createWire(zoneOutPort, reqZoneInput);
+                } catch (Exception ignored) {
+                }
             }
 
         } catch (Exception e) {

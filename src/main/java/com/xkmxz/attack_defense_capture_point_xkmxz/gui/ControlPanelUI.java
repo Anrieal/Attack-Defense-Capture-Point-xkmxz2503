@@ -1,7 +1,6 @@
 package com.xkmxz.attack_defense_capture_point_xkmxz.gui;
 
 import com.lowdragmc.lowdraglib2.gui.holder.ModularUIScreen;
-import com.lowdragmc.lowdraglib2.gui.texture.ColorBorderTexture;
 import com.lowdragmc.lowdraglib2.gui.texture.ColorRectTexture;
 import com.lowdragmc.lowdraglib2.gui.ui.ModularUI;
 import com.lowdragmc.lowdraglib2.gui.ui.UI;
@@ -16,7 +15,9 @@ import com.lowdragmc.lowdraglib2.gui.ui.styletemplate.Sprites;
 import com.lowdragmc.lowdraglib2.gui.util.DrawerHelper;
 import com.xkmxz.attack_defense_capture_point_xkmxz.manager.CaptureManager;
 import net.minecraft.client.Minecraft;
+import net.minecraft.client.gui.Font;
 import net.minecraft.network.chat.Component;
+import net.minecraft.util.Mth;
 import net.minecraft.world.level.Level;
 import org.joml.Vector2f;
 
@@ -24,41 +25,75 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * 攻防战据点图编辑器 — 类似 graphif.dev 风格的节点图编辑器。
+ * 攻防战据点图编辑器 — 基于 graphif 架构的 Canvas2D 节点图编辑器。
  * <p>
- * 将据点和区域渲染为可拖拽的圆角节点，连接线展示归属/依赖关系。
+ * 使用纯画布渲染（类似 graphif 的 Canvas2D + Camera 系统），
+ * 节点和连线直接在 GraphView 上绘制，支持拖拽、选中和高亮。
  */
 public class ControlPanelUI {
 
+    // ---- 颜色常量 (ARGB) ----
+    private static final int COLOR_BG_DARK = 0xCC1A1A2E;
+    private static final int COLOR_BG_POINT_CAPTURED = 0xCC1B5E20;
+    private static final int COLOR_BORDER_POINT_CAPTURED = 0xFF66BB6A;
+    private static final int COLOR_BG_POINT_FREE = 0xCC263238;
+    private static final int COLOR_BORDER_POINT_FREE = 0xFF78909C;
+    private static final int COLOR_BG_ZONE_CAPTURED = 0xCC0D47A1;
+    private static final int COLOR_BORDER_ZONE_CAPTURED = 0xFF42A5F5;
+    private static final int COLOR_BG_ZONE_LOCKED = 0xCCBF360C;
+    private static final int COLOR_BORDER_ZONE_LOCKED = 0xFFFF7043;
+    private static final int COLOR_BG_ZONE_FREE = 0xCC4A148C;
+    private static final int COLOR_BORDER_ZONE_FREE = 0xFFAB47BC;
+    private static final int COLOR_EDGE_MEMBERSHIP = 0xAA90CAF9;
+    private static final int COLOR_EDGE_DEPENDENCY = 0xAAFFAB91;
+    private static final int COLOR_SELECTION_HIGHLIGHT = 0xFFFFFFFF;
+    private static final int COLOR_TEXT_WHITE = 0xFFFFFFFF;
+    private static final int COLOR_TEXT_DIM = 0xAAFFFFFF;
+    private static final int COLOR_TOOLTIP_BG = 0xCC000000;
+
     private final Level level;
 
-    // 存储所有创建的节点，用于连接线绘制
-    private final List<GraphNode> pointNodes = new ArrayList<>();
-    private final List<GraphNode> zoneNodes = new ArrayList<>();
-    private ConnectionLayer connectionLayer;
+    // 图数据模型
+    private final List<NodeData> nodes = new ArrayList<>();
+    private final List<EdgeData> edges = new ArrayList<>();
+
+    // 交互状态
+    private NodeData selectedNode;
+    private NodeData draggingNode;
+    private float dragStartMX, dragStartMY;
+    private float dragOrigNX, dragOrigNY;
+
+    // 画布引用
+    private GraphView graphView;
+    private GraphCanvas canvas;
 
     public ControlPanelUI(Level level) {
         this.level = level;
     }
 
     public void open() {
-        var window = Minecraft.getInstance().getWindow();
+        var mc = Minecraft.getInstance();
+        var window = mc.getWindow();
         int screenW = window.getGuiScaledWidth();
         int screenH = window.getGuiScaledHeight();
         int guiW = (int) (screenW * 0.88f);
         int guiH = (int) (screenH * 0.86f);
-        int graphW = guiW - 12;
+        int sidebarW = 60;
+        int graphW = guiW - sidebarW - 14;
         int graphH = guiH - 80;
 
         var root = new UIElement()
                 .layout(l -> l.paddingAll(4).gapAll(3).width(guiW).height(guiH))
                 .style(s -> s.background(Sprites.BORDER));
 
-        // 标题
-        root.addChildren(new Label()
+        // === 左侧主区域 ===
+        var mainArea = new UIElement()
+                .layout(l -> l.width(graphW).heightPercent(100).gapAll(3));
+
+        mainArea.addChildren(new Label()
                 .setText(Component.translatable("gui.attack_defense_capture_point_xkmxz.graph.title")));
 
-        // === 顶部工具栏 ===
+        // 顶部工具栏
         var toolbar = new UIElement().layout(l -> l.gapAll(3));
         toolbar.addChildren(
                 new Button()
@@ -73,423 +108,457 @@ public class ControlPanelUI {
                 new Button()
                         .setText(Component.translatable("gui.attack_defense_capture_point_xkmxz.graph.btn_refresh"))
                         .setOnClick(e -> {
-                            Minecraft.getInstance().setScreen(null);
+                            mc.setScreen(null);
                             new ControlPanelUI(level).open();
                         }),
                 new Button()
                         .setText(Component.translatable("gui.attack_defense_capture_point_xkmxz.block.close"))
-                        .setOnClick(e -> Minecraft.getInstance().setScreen(null))
+                        .setOnClick(e -> mc.setScreen(null))
         );
-        root.addChildren(toolbar);
+        mainArea.addChildren(toolbar);
 
-        // === GraphView 画布 ===
-        GraphView graph = new GraphView();
-        graph.graphViewStyle(style -> {
+        // === GraphView 画布 (Camera System) ===
+        graphView = new GraphView();
+        graphView.graphViewStyle(style -> {
             style.allowZoom(true);
             style.allowPan(true);
             style.minScale(0.2f);
             style.maxScale(4.0f);
         });
-        graph.layout(l -> l.width(graphW).height(graphH));
+        graphView.layout(l -> l.widthPercent(100).height(graphH));
 
-        // 连接线层（必须先添加，渲染在节点下方）
-        connectionLayer = new ConnectionLayer();
-        graph.addContentChild(connectionLayer);
+        // 自定义画布层
+        canvas = new GraphCanvas();
+        graphView.addContentChild(canvas);
 
-        // 从 CaptureManager 加载数据
-        pointNodes.clear();
-        zoneNodes.clear();
-        loadData(graph);
+        // 加载数据
+        loadData();
 
-        // 如果没有节点，显示空提示
-        if (pointNodes.isEmpty() && zoneNodes.isEmpty()) {
+        if (nodes.isEmpty()) {
             var hintNode = new UIElement();
             hintNode.layout(l -> l.paddingAll(8).width(200).height(50));
             hintNode.addChildren(new Label()
                     .setText(Component.translatable("gui.attack_defense_capture_point_xkmxz.graph.empty_hint")));
-            graph.addContentChild(hintNode);
+            graphView.addContentChild(hintNode);
         }
 
-        // 自动适配视图
-        graph.fitToChildren(60f, 0.15f);
+        if (!nodes.isEmpty()) {
+            graphView.fitToChildren(60f, 0.15f);
+        }
 
-        // === 右侧缩放条 ===
-        var zoomBar = new UIElement().layout(l -> l.gapAll(3));
-        zoomBar.style(s -> s.background(Sprites.BORDER));
+        mainArea.addChildren(graphView);
 
-        zoomBar.addChildren(new Label()
-                .setText(Component.translatable("gui.attack_defense_capture_point_xkmxz.graph.zoom")));
+        // === 右侧缩放边栏 ===
+        var sidebar = new UIElement()
+                .layout(l -> l.flexDirection(dev.vfyjxf.taffy.style.FlexDirection.COLUMN)
+                        .width(sidebarW)
+                        .heightPercent(100)
+                        .paddingAll(4)
+                        .gapAll(4))
+                .style(s -> s.background(Sprites.BORDER));
 
-        int zw = 50;
-        addZoomBtn(zoomBar, "25%", zw, () -> graph.fitToChildren(60f, 0.15f));
-        addZoomBtn(zoomBar, "50%", zw, () -> graph.fitToChildren(60f, 0.15f));
-        addZoomBtn(zoomBar, "75%", zw, () -> graph.fitToChildren(60f, 0.15f));
-        addZoomBtn(zoomBar, "100%", zw, () -> graph.fitToChildren(60f, 0.15f));
-        addZoomBtn(zoomBar, "150%", zw, () -> graph.fitToChildren(60f, 0.15f));
-        addZoomBtn(zoomBar, "200%", zw, () -> graph.fitToChildren(60f, 0.15f));
-        zoomBar.addChildren(new Label().setText(Component.literal("---")));
-        addZoomBtn(zoomBar, "Fit", zw, () -> graph.fitToChildren(60f, 0.15f));
+        sidebar.addChildren(new Label()
+                .setText(Component.translatable("gui.attack_defense_capture_point_xkmxz.graph.zoom"))
+                .layout(l -> l.widthPercent(100)));
 
-        graph.addEditorChild(zoomBar, 0);
+        // 缩放滑块（自定义，通过鼠标拖拽调节）
+        var slider = new ZoomSlider(graphView);
+        slider.layout(l -> l.width(12).height(120));
+        // 居中
+        var sliderWrapper = new UIElement()
+                .layout(l -> l.justifyContent(dev.vfyjxf.taffy.style.AlignContent.CENTER)
+                        .widthPercent(100));
+        sliderWrapper.addChildren(slider);
+        sidebar.addChildren(sliderWrapper);
 
-        root.addChildren(graph);
+        // 当前缩放百分比
+        var zoomLabel = new Label();
+        zoomLabel.setText(getZoomText(graphView.getScale()));
+        zoomLabel.layout(l -> l.widthPercent(100));
+        sidebar.addChildren(zoomLabel);
+
+        // Fit 按钮
+        var fitBtn = new Button()
+                .setText("Fit")
+                .setOnClick(e -> graphView.fitToChildren(60f, 0.15f));
+        fitBtn.layout(l -> l.widthPercent(100).height(18));
+        sidebar.addChildren(fitBtn);
+
+        // 监听缩放变化更新显示
+        graphView.addEventListener(UIEvents.MOUSE_WHEEL, ev -> {
+            zoomLabel.setText(getZoomText(graphView.getScale()));
+        });
+
+        root.addChildren(mainArea, sidebar);
 
         var ui = ModularUI.of(UI.of(root));
-        Minecraft.getInstance().setScreen(
+        mc.setScreen(
                 new ModularUIScreen(ui, Component.translatable("gui.attack_defense_capture_point_xkmxz.graph.title"))
         );
     }
 
-    /**
-     * 从 CaptureManager 读取据点和区域数据，渲染为节点图。
-     * <p>
-     * 在客户端侧，尝试通过集成服务器（单人模式）获取 ServerLevel；
-     * 在纯客户端（联机）时，数据不可用，画布显示空（与原有行为一致）。
-     */
-    private void loadData(GraphView graph) {
-        // 尝试获取服务器端的 Level 以读取 CaptureManager
+    private static String getZoomText(float scale) {
+        return (int) (scale * 100) + "%";
+    }
+
+    // ============================================================
+    //  数据模型
+    // ============================================================
+
+    enum NodeKind { POINT, ZONE }
+
+    static class NodeData {
+        String name;
+        NodeKind kind;
+        boolean captured;
+        String ownerOrLocked; // for points: owner name; for zones: requiredZone if locked
+        float x, y;           // position in world space (center of node)
+        float w, h;           // size (width, height)
+        boolean selected;
+
+        NodeData(String name, NodeKind kind, boolean captured, String ownerOrLocked) {
+            this.name = name;
+            this.kind = kind;
+            this.captured = captured;
+            this.ownerOrLocked = ownerOrLocked;
+            this.w = 160;
+            this.h = 48;
+        }
+    }
+
+    enum EdgeKind { MEMBERSHIP, DEPENDENCY }
+
+    record EdgeData(NodeData from, NodeData to, EdgeKind kind) {}
+
+    // ============================================================
+    //  数据加载
+    // ============================================================
+
+    private void loadData() {
         var serverLevel = getServerLevel();
         if (serverLevel == null) return;
 
         var manager = CaptureManager.get(serverLevel);
         var points = manager.getPoints();
         var zones = manager.getZones();
-
         if (points.isEmpty() && zones.isEmpty()) return;
 
-        // 计算布局 —— 简单的网格布局
+        // 布局计算：网格布局
         float startX = 80f;
         float startY = 60f;
         float gapX = 200f;
         float gapY = 100f;
 
-        // 第一行：所有据点节点
         float curX = startX;
         float curY = startY + 60f;
         int idx = 0;
+
         for (var entry : points.values()) {
             boolean captured = entry.owner() != null;
-            var node = new GraphNode(
-                    entry.name(),
-                    GraphNodeType.POINT,
-                    captured,
-                    captured ? entry.owner() : null
-            );
-            float nodeX = curX;
-            float nodeY = curY;
-            node.layout(l -> l
-                    .positionType(dev.vfyjxf.taffy.style.TaffyPosition.ABSOLUTE)
-                    .left(nodeX)
-                    .top(nodeY)
-                    .width(160)
-                    .height(48)
-            );
-            graph.addContentChild(node);
-            pointNodes.add(node);
+            var node = new NodeData(entry.name(), NodeKind.POINT, captured,
+                    captured ? entry.owner() : null);
+            node.x = curX + 80;
+            node.y = curY + 24;
+            nodes.add(node);
             idx++;
             curX += gapX;
-            if (idx % 4 == 0) {
-                curX = startX;
-                curY += gapY;
-            }
+            if (idx % 4 == 0) { curX = startX; curY += gapY; }
         }
 
-        // 第二行：所有区域节点
         curX = startX + 80f;
         curY += 60f;
         idx = 0;
+
         for (var entry : zones.values()) {
-            var captured = manager.isZoneCaptured(entry.name());
-            var accessible = manager.canAccessZone(entry.name());
-            var node = new GraphNode(
-                    entry.name(),
-                    GraphNodeType.ZONE,
-                    captured,
-                    accessible ? null : entry.requiredZone()
-            );
-            float nodeX = curX;
-            float nodeY = curY;
-            node.layout(l -> l
-                    .positionType(dev.vfyjxf.taffy.style.TaffyPosition.ABSOLUTE)
-                    .left(nodeX)
-                    .top(nodeY)
-                    .width(160)
-                    .height(48)
-            );
-            graph.addContentChild(node);
-            zoneNodes.add(node);
+            boolean captured = manager.isZoneCaptured(entry.name());
+            boolean accessible = manager.canAccessZone(entry.name());
+            var node = new NodeData(entry.name(), NodeKind.ZONE, captured,
+                    accessible ? null : entry.requiredZone());
+            node.x = curX + 80;
+            node.y = curY + 24;
+            nodes.add(node);
             idx++;
             curX += gapX;
-            if (idx % 4 == 0) {
-                curX = startX + 80f;
-                curY += gapY;
-            }
+            if (idx % 4 == 0) { curX = startX + 80f; curY += gapY; }
         }
 
-        // 注册连接线
+        // 注册边
         for (var entry : points.values()) {
-            String pointName = entry.name();
-            var pointNode = findNode(pointName, GraphNodeType.POINT);
-            if (pointNode == null) continue;
-
-            // 查找该点所属的区域
-            for (var zoneEntry : zones.values()) {
-                if (zoneEntry.capturePoints().contains(pointName)) {
-                    var zoneNode = findNode(zoneEntry.name(), GraphNodeType.ZONE);
-                    if (zoneNode != null) {
-                        connectionLayer.addConnection(pointNode, zoneNode, ConnectionType.MEMBERSHIP);
-                    }
+            var pn = findNode(entry.name());
+            if (pn == null) continue;
+            for (var ze : zones.values()) {
+                if (ze.capturePoints().contains(entry.name())) {
+                    var zn = findNode(ze.name());
+                    if (zn != null) edges.add(new EdgeData(pn, zn, EdgeKind.MEMBERSHIP));
                 }
             }
         }
-
-        // 区域间的依赖关系
         for (var entry : zones.values()) {
             if (entry.requiredZone() != null) {
-                var zoneNode = findNode(entry.name(), GraphNodeType.ZONE);
-                var depNode = findNode(entry.requiredZone(), GraphNodeType.ZONE);
-                if (zoneNode != null && depNode != null) {
-                    connectionLayer.addConnection(depNode, zoneNode, ConnectionType.DEPENDENCY);
-                }
+                var zn = findNode(entry.name());
+                var dn = findNode(entry.requiredZone());
+                if (zn != null && dn != null) edges.add(new EdgeData(dn, zn, EdgeKind.DEPENDENCY));
             }
         }
     }
 
-    private GraphNode findNode(String name, GraphNodeType type) {
-        var list = type == GraphNodeType.POINT ? pointNodes : zoneNodes;
-        for (var node : list) {
-            if (node.nodeName.equals(name)) return node;
-        }
+    private NodeData findNode(String name) {
+        for (var n : nodes) if (n.name.equals(name)) return n;
         return null;
     }
 
-    // ---- UI Components ----
+    // ============================================================
+    //  画布渲染 (Canvas2D — 类似 graphif 的 Canvas + Renderer)
+    // ============================================================
 
-    /**
-     * 节点类型
-     */
-    private enum GraphNodeType {
-        POINT,
-        ZONE
-    }
+    private class GraphCanvas extends UIElement {
 
-    /**
-     * 连接类型
-     */
-    private enum ConnectionType {
-        MEMBERSHIP,  // 据点 -> 区域
-        DEPENDENCY   // 依赖区域 -> 区域
-    }
-
-    /**
-     * 可拖拽的图节点 — 圆角矩形 + 名称标签
-     */
-    private static class GraphNode extends UIElement {
-        final String nodeName;
-        final GraphNodeType nodeType;
-        final boolean captured;
-        final String ownerOrLocked;
-
-        // 拖动状态
-        private boolean dragging = false;
-        private float dragStartLeft, dragStartTop;
-
-        GraphNode(String name, GraphNodeType type, boolean captured, String ownerOrLocked) {
-            this.nodeName = name;
-            this.nodeType = type;
-            this.captured = captured;
-            this.ownerOrLocked = ownerOrLocked;
-
-            // 根据类型和状态选择颜色
-            int bgColor;
-            int borderColor;
-            if (type == GraphNodeType.POINT) {
-                if (captured) {
-                    // 已占领据点 —— 绿色调
-                    bgColor = 0xCC1B5E20;
-                    borderColor = 0xFF4CAF50;
-                } else {
-                    // 未占领据点 —— 灰蓝色调
-                    bgColor = 0xCC263238;
-                    borderColor = 0xFF546E7A;
-                }
-            } else {
-                if (captured) {
-                    // 已占领区域 —— 蓝色调
-                    bgColor = 0xCC0D47A1;
-                    borderColor = 0xFF42A5F5;
-                } else if (ownerOrLocked != null) {
-                    // 锁定区域 —— 橙色调
-                    bgColor = 0xCCBF360C;
-                    borderColor = 0xFFFF7043;
-                } else {
-                    // 未占领区域 —— 紫色调
-                    bgColor = 0xCC4A148C;
-                    borderColor = 0xFFAB47BC;
-                }
-            }
-
-            // 圆角矩形背景 (使用 RECT_RD)
-            style(s -> s.background(Sprites.RECT_RD_SOLID).backgroundTexture(new ColorRectTexture(bgColor)));
-
-            // 叠加边框颜色
-            style(s -> s.overlayTexture(new ColorBorderTexture(-3, borderColor)));
-
-            // 类型图标 + 名称
-            String prefix;
-            if (type == GraphNodeType.POINT) {
-                if (captured) {
-                    prefix = "\u2691 "; // ⚑ 旗帜
-                } else {
-                    prefix = "\u25CB "; // ○ 空心圆
-                }
-            } else {
-                if (captured) {
-                    prefix = "\u25A0 "; // ■ 实心方块
-                } else {
-                    prefix = "\u25A1 "; // □ 空心方块
-                }
-            }
-
-            addChildren(new Label()
-                    .setText(Component.literal(prefix + name))
-                    .layout(l -> l.paddingAll(4)));
-
-            // 添加鼠标拖动支持
-            addEventListener(UIEvents.MOUSE_DOWN, this::onNodeMouseDown);
-            addEventListener(UIEvents.DRAG_SOURCE_UPDATE, this::onNodeDragUpdate);
-        }
-
-        private void onNodeMouseDown(UIEvent event) {
-            if (event.button == 0) {
-                dragging = true;
-                dragStartLeft = getPositionX();
-                dragStartTop = getPositionY();
-                // 需要获取 GraphView 的 scale
-                // 使用父链获取 GraphView
-                startDrag(new NodeDragData(dragStartLeft, dragStartTop), null);
-            }
-        }
-
-        private void onNodeDragUpdate(UIEvent event) {
-            if (!dragging) return;
-            if (!(event.dragHandler.draggingObject instanceof NodeDragData data)) return;
-
-            // 获取 GraphView 的 scale
-            float scale = getGraphViewScale();
-            if (scale < 0.001f) scale = 1f;
-
-            float dx = (event.x - event.dragStartX) / scale;
-            float dy = (event.y - event.dragStartY) / scale;
-
-            float newLeft = data.startLeft + dx;
-            float newTop = data.startTop + dy;
-
-            layout(l -> l.left(newLeft).top(newTop));
-        }
-
-        private float getGraphViewScale() {
-            var parent = getParent();
-            while (parent != null) {
-                if (parent instanceof GraphView gv) {
-                    return gv.getScale();
-                }
-                parent = parent.getParent();
-            }
-            return 1f;
-        }
-
-        private record NodeDragData(float startLeft, float startTop) {
-        }
-    }
-
-    /**
-     * 连接线层 — 绘制节点间的连线
-     */
-    private static class ConnectionLayer extends UIElement {
-        private final List<Connection> connections = new ArrayList<>();
-
-        record Connection(GraphNode from, GraphNode to, ConnectionType type) {
-        }
-
-        void addConnection(GraphNode from, GraphNode to, ConnectionType type) {
-            connections.add(new Connection(from, to, type));
+        GraphCanvas() {
+            // 鼠标事件处理：选中、拖拽
+            addEventListener(UIEvents.MOUSE_DOWN, this::onMouseDown);
+            addEventListener(UIEvents.DRAG_SOURCE_UPDATE, this::onDragUpdate);
+            addEventListener(UIEvents.DRAG_END, this::onDragEnd);
         }
 
         @Override
-        public void drawBackgroundAdditional(GUIContext context) {
-            // 在画布变换后的坐标系中绘制连接线
-            for (var conn : connections) {
-                var from = conn.from();
-                var to = conn.to();
+        public void drawBackgroundAdditional(GUIContext ctx) {
+            if (nodes.isEmpty()) return;
 
-                float x1 = from.getPositionX() + from.getSizeWidth() / 2f;
-                float y1 = from.getPositionY() + from.getSizeHeight();
-                float x2 = to.getPositionX() + to.getSizeWidth() / 2f;
-                float y2 = to.getPositionY();
+            // 1. 绘制所有边（在节点下方）
+            for (var edge : edges) {
+                drawEdge(ctx, edge);
+            }
 
-                // 如果两个节点都可见
-                if (from.isDisplayed() && to.isDisplayed()) {
-                    int color;
-                    float lineWidth;
-                    if (conn.type() == ConnectionType.MEMBERSHIP) {
-                        color = 0xAA90CAF9; // 淡蓝色
-                        lineWidth = 1.5f;
-                    } else {
-                        color = 0xAAFFAB91; // 淡橙色（依赖关系）
-                        lineWidth = 2.0f;
-                    }
+            // 2. 绘制所有节点
+            for (var node : nodes) {
+                drawNode(ctx, node);
+            }
 
-                    // 调整连接点：从 from 底部到 to 顶部
-                    // 使用贝塞尔曲线或简单折线
-                    drawCurvedLine(context, x1, y1, x2, y2, color, lineWidth);
-                }
+            // 3. 绘制选中节点的详情提示
+            if (selectedNode != null) {
+                drawSelectionInfo(ctx, selectedNode);
             }
         }
 
-        /**
-         * 绘制节点间的曲线连接
-         */
-        private void drawCurvedLine(GUIContext context, float x1, float y1, float x2, float y2,
-                                     int color, float width) {
-            float midY = (y1 + y2) / 2f;
-            float controlY = midY;
+        // ---- 节点绘制 ----
 
-            // 用分段线性近似绘制贝塞尔曲线
+        private void drawNode(GUIContext ctx, NodeData node) {
+            float rx = node.x - node.w / 2f;
+            float ry = node.y - node.h / 2f;
+
+            int bgColor, borderColor;
+            if (node.kind == NodeKind.POINT) {
+                if (node.captured) {
+                    bgColor = COLOR_BG_POINT_CAPTURED;
+                    borderColor = node.selected ? COLOR_SELECTION_HIGHLIGHT : COLOR_BORDER_POINT_CAPTURED;
+                } else {
+                    bgColor = COLOR_BG_POINT_FREE;
+                    borderColor = node.selected ? COLOR_SELECTION_HIGHLIGHT : COLOR_BORDER_POINT_FREE;
+                }
+            } else {
+                if (node.captured) {
+                    bgColor = COLOR_BG_ZONE_CAPTURED;
+                    borderColor = node.selected ? COLOR_SELECTION_HIGHLIGHT : COLOR_BORDER_ZONE_CAPTURED;
+                } else if (node.ownerOrLocked != null) {
+                    bgColor = COLOR_BG_ZONE_LOCKED;
+                    borderColor = node.selected ? COLOR_SELECTION_HIGHLIGHT : COLOR_BORDER_ZONE_LOCKED;
+                } else {
+                    bgColor = COLOR_BG_ZONE_FREE;
+                    borderColor = node.selected ? COLOR_SELECTION_HIGHLIGHT : COLOR_BORDER_ZONE_FREE;
+                }
+            }
+
+            // 圆角矩形本体
+            DrawerHelper.drawSolidRect(ctx.graphics, rx, ry, node.w, node.h, bgColor);
+
+            // 选中高亮边框（外扩 2px）
+            if (node.selected) {
+                DrawerHelper.drawBorder(ctx.graphics, rx - 2, ry - 2, node.w + 4, node.h + 4, borderColor, 2);
+            }
+
+            // 普通边框
+            DrawerHelper.drawBorder(ctx.graphics, rx, ry, node.w, node.h, borderColor, 1);
+
+            // 文本：图标 + 名称
+            String icon = switch (node.kind) {
+                case POINT -> node.captured ? "\u2691" : "\u25CB";
+                case ZONE -> node.captured ? "\u25A0" : "\u25A1";
+            };
+            String label = icon + " " + node.name;
+
+            Font font = Minecraft.getInstance().font;
+            // 文字居中
+            float textX = rx + 8;
+            float textY = ry + (node.h - font.lineHeight) / 2f + 1;
+            DrawerHelper.drawText(ctx.graphics, label, textX, textY, 1.0f, COLOR_TEXT_WHITE);
+
+            // 状态标签（右下角小字）
+            String status = switch (node.kind) {
+                case POINT -> node.captured ? node.ownerOrLocked : "\u25CB";
+                case ZONE -> {
+                    if (node.captured) yield "Captured";
+                    else if (node.ownerOrLocked != null) yield "Locked";
+                    else yield "Free";
+                }
+            };
+            if (node.kind == NodeKind.ZONE || (node.kind == NodeKind.POINT && node.captured)) {
+                float sw = font.width(status);
+                DrawerHelper.drawText(ctx.graphics, status,
+                        rx + node.w - sw - 6, ry + node.h - font.lineHeight - 2,
+                        0.7f, COLOR_TEXT_DIM);
+            }
+        }
+
+        // ---- 边绘制 ----
+
+        private void drawEdge(GUIContext ctx, EdgeData edge) {
+            float x1 = edge.from.x;
+            float y1 = edge.from.y + edge.from.h / 2f;
+            float x2 = edge.to.x;
+            float y2 = edge.to.y - edge.to.h / 2f;
+
+            int color = switch (edge.kind) {
+                case MEMBERSHIP -> COLOR_EDGE_MEMBERSHIP;
+                case DEPENDENCY -> COLOR_EDGE_DEPENDENCY;
+            };
+            float lineWidth = switch (edge.kind) {
+                case MEMBERSHIP -> 1.5f;
+                case DEPENDENCY -> 2.0f;
+            };
+
+            // 贝塞尔曲线：从 from 底部到 to 顶部
+            drawBezier(ctx, x1, y1, x2, y2, color, lineWidth);
+        }
+
+        private void drawBezier(GUIContext ctx, float x1, float y1, float x2, float y2,
+                                 int color, float width) {
+            float midY = (y1 + y2) / 2f;
             var points = new ArrayList<Vector2f>();
-            int segments = 20;
+            int segments = 24;
             for (int i = 0; i <= segments; i++) {
                 float t = (float) i / segments;
                 float t1 = 1 - t;
-
-                // 简单三次贝塞尔: 起点 -> 控制点1 -> 控制点2 -> 终点
-                // 控制点1: (x1, midY) 控制点2: (x2, midY)
                 float px = t1 * t1 * t1 * x1 + 3 * t1 * t1 * t * x1 + 3 * t1 * t * t * x2 + t * t * t * x2;
-                float py = t1 * t1 * t1 * y1 + 3 * t1 * t1 * t * controlY + 3 * t1 * t * t * controlY + t * t * t * y2;
-
+                float py = t1 * t1 * t1 * y1 + 3 * t1 * t1 * t * midY + 3 * t1 * t * t * midY + t * t * t * y2;
                 points.add(new Vector2f(px, py));
             }
+            DrawerHelper.drawLines(ctx.graphics, points, color, color, width);
 
-            DrawerHelper.drawLines(context.graphics, points, color, color, width);
+            // 终点箭头
+            drawArrowhead(ctx, x1, y1, x2, y2, color);
+        }
+
+        private void drawArrowhead(GUIContext ctx, float x1, float y1, float x2, float y2, int color) {
+            float dx = x2 - x1;
+            float dy = y2 - y1;
+            float len = (float) Math.sqrt(dx * dx + dy * dy);
+            if (len < 1f) return;
+            float ux = dx / len;
+            float uy = dy / len;
+            float arrowSize = 8f;
+            float px = x2 - ux * 6f;
+            float py = y2 - uy * 6f;
+            float ax = -uy * arrowSize * 0.4f;
+            float ay = ux * arrowSize * 0.4f;
+
+            var arrow = new ArrayList<Vector2f>();
+            arrow.add(new Vector2f(x2, y2));
+            arrow.add(new Vector2f(px + ax, py + ay));
+            arrow.add(new Vector2f(px - ax, py - ay));
+            DrawerHelper.drawLines(ctx.graphics, arrow, color, color, 1.0f);
+        }
+
+        // ---- 选中信息 ----
+
+        private void drawSelectionInfo(GUIContext ctx, NodeData node) {
+            String info = switch (node.kind) {
+                case POINT -> {
+                    if (node.captured) yield "Owner: " + node.ownerOrLocked;
+                    else yield "Free point";
+                }
+                case ZONE -> {
+                    if (node.captured) yield "Zone captured";
+                    else if (node.ownerOrLocked != null) yield "Requires: " + node.ownerOrLocked;
+                    else yield "Free zone";
+                }
+            };
+            float rx = node.x - node.w / 2f;
+            float ty = node.y + node.h / 2f + 4;
+            DrawerHelper.drawText(ctx.graphics, info, rx, ty, 0.8f, COLOR_TEXT_DIM);
+        }
+
+        // ============================================================
+        //  鼠标交互
+        // ============================================================
+
+        private void onMouseDown(UIEvent event) {
+            if (event.button != 0) return;
+            float scale = getParentScale();
+            float mx = (event.x - getPositionX()) / scale + graphView.getOffsetX();
+            float my = (event.y - getPositionY()) / scale + graphView.getOffsetY();
+
+            // 选中检测（反向遍历，上层节点优先）
+            NodeData hit = null;
+            for (int i = nodes.size() - 1; i >= 0; i--) {
+                var n = nodes.get(i);
+                if (mx >= n.x - n.w / 2f && mx <= n.x + n.w / 2f &&
+                    my >= n.y - n.h / 2f && my <= n.y + n.h / 2f) {
+                    hit = n;
+                    break;
+                }
+            }
+
+            // 更新选中状态
+            for (var n : nodes) n.selected = false;
+            if (hit != null) {
+                hit.selected = true;
+                selectedNode = hit;
+                // 开始拖拽
+                draggingNode = hit;
+                // 计算拖拽起始位置（世界坐标）
+                dragOrigNX = hit.x;
+                dragOrigNY = hit.y;
+                // 记录鼠标起始位置（局部坐标）
+                dragStartMX = event.x;
+                dragStartMY = event.y;
+            } else {
+                selectedNode = null;
+                draggingNode = null;
+            }
+        }
+
+        private void onDragUpdate(UIEvent event) {
+            if (draggingNode == null) return;
+
+            float scale = getParentScale();
+            float dx = (event.x - dragStartMX) / scale;
+            float dy = (event.y - dragStartMY) / scale;
+
+            draggingNode.x = dragOrigNX + dx;
+            draggingNode.y = dragOrigNY + dy;
+        }
+
+        private void onDragEnd(UIEvent event) {
+            draggingNode = null;
+        }
+
+        private float getParentScale() {
+            var p = getParent();
+            while (p != null) {
+                if (p instanceof GraphView gv) return gv.getScale();
+                p = p.getParent();
+            }
+            return 1f;
         }
     }
 
-    // ---- Utility Methods ----
+    // ============================================================
+    //  工具方法
+    // ============================================================
 
-    /**
-     * 获取服务端 Level，用于读取 CaptureManager 数据。
-     * <ul>
-     *   <li>如果当前已经是 ServerLevel，直接返回</li>
-     *   <li>单人模式：通过集成服务器获取对应维度的 ServerLevel</li>
-     *   <li>联机客户端：返回 null（数据不可用）</li>
-     * </ul>
-     */
     @org.jetbrains.annotations.Nullable
     private net.minecraft.server.level.ServerLevel getServerLevel() {
-        if (level instanceof net.minecraft.server.level.ServerLevel sl) {
-            return sl;
-        }
-        // 单人模式：从集成服务器获取
+        if (level instanceof net.minecraft.server.level.ServerLevel sl) return sl;
         var mc = Minecraft.getInstance();
         if (mc.hasSingleplayerServer() && mc.getSingleplayerServer() != null) {
             return mc.getSingleplayerServer().getLevel(level.dimension());
@@ -497,12 +566,75 @@ public class ControlPanelUI {
         return null;
     }
 
-    private static void addZoomBtn(UIElement parent, String label, int width, Runnable action) {
-        var btn = new Button();
-        btn.setText(label);
-        btn.setOnClick(e -> action.run());
-        btn.layout(l -> l.width(width).height(18));
-        parent.addChildren(btn);
+    /**
+     * 垂直滑块 — 通过鼠标拖拽调节 GraphView 缩放比例。
+     */
+    private static class ZoomSlider extends UIElement {
+        private final GraphView target;
+        private float value = 0.5f; // 0~1, 映射到 minScale~maxScale
+        private static final int BAR_COLOR = 0xCC666666;
+        private static final int THUMB_COLOR = 0xFFAAAAAA;
+        private static final int TRACK_COLOR = 0x44444444;
+
+        ZoomSlider(GraphView target) {
+            this.target = target;
+            style(s -> s.background(Sprites.RECT_SOLID)
+                    .backgroundTexture(new ColorRectTexture(TRACK_COLOR)));
+            addEventListener(UIEvents.MOUSE_DOWN, this::onMouseDown);
+            addEventListener(UIEvents.DRAG_SOURCE_UPDATE, this::onDragUpdate);
+        }
+
+        @Override
+        public void drawBackgroundAdditional(GUIContext ctx) {
+            float h = getSizeHeight();
+            float w = getSizeWidth();
+            float thumbH = 16f;
+
+            // 滑块轨道
+            DrawerHelper.drawSolidRect(ctx.graphics, 0, 0, w, h, TRACK_COLOR);
+
+            // 已填充部分
+            float fillH = h * value;
+            DrawerHelper.drawSolidRect(ctx.graphics, 0, h - fillH, w, fillH, BAR_COLOR);
+
+            // 滑块thumb
+            float thumbY = h - fillH - thumbH / 2f;
+            DrawerHelper.drawSolidRect(ctx.graphics, 0, thumbY, w, thumbH, THUMB_COLOR);
+        }
+
+        private void onMouseDown(UIEvent event) {
+            if (event.button != 0) return;
+            updateValue(event.y);
+            startDrag(this, null);
+        }
+
+        private void onDragUpdate(UIEvent event) {
+            updateValue(event.y);
+        }
+
+        private void updateValue(float mouseY) {
+            float h = getSizeHeight();
+            if (h <= 0) return;
+            // 从底部计算比率
+            value = Mth.clamp(1f - (mouseY - getPositionY()) / h, 0f, 1f);
+            applyZoom();
+        }
+
+        private void applyZoom() {
+            float minS = target.getGraphViewStyle().minScale();
+            float maxS = target.getGraphViewStyle().maxScale();
+            float newScale = Mth.clamp(minS + (maxS - minS) * value, minS, maxS);
+            // 通过 reflect 设置 scale（GraphView 只有 @Getter 没有 @Setter）
+            try {
+                var field = GraphView.class.getDeclaredField("scale");
+                field.setAccessible(true);
+                field.setFloat(target, newScale);
+                var method = GraphView.class.getDeclaredMethod("refreshContentTransform");
+                method.setAccessible(true);
+                method.invoke(target);
+            } catch (Exception ignored) {
+            }
+        }
     }
 
     private static void runCmd(String commands) {

@@ -9,7 +9,6 @@ import com.lowdragmc.lowdraglib2.gui.ui.elements.Button;
 import com.lowdragmc.lowdraglib2.gui.ui.elements.Label;
 import com.lowdragmc.lowdraglib2.gui.ui.styletemplate.Sprites;
 import com.lowdragmc.lowdraglib2.nodegraphtookit.model.GraphElementModel;
-import com.lowdragmc.lowdraglib2.nodegraphtookit.model.node.InputOutputPortsNodeModel;
 import com.lowdragmc.lowdraglib2.nodegraphtookit.model.node.NodeModel;
 import com.lowdragmc.lowdraglib2.nodegraphtookit.model.node.PortModel;
 import com.lowdragmc.lowdraglib2.nodegraphtookit.model.wire.WireModel;
@@ -324,17 +323,18 @@ public class CapturePointGraphScreen {
                 idx++;
             }
 
-            // 创建区域节点
+            // 创建区域节点（右侧区域，使用独立计数器网格排列）
+            int zoneIdx = 0;
             for (var entry : zones.values()) {
-                float x = startX + 250;
-                float y = startY + ((idx - points.size()) % 3) * gapY + 100;
+                float x = startX + 250 + (zoneIdx % 3) * gapX;
+                float y = startY + (zoneIdx / 3) * gapY + gapY;
                 var node = new CaptureZoneNode();
                 var nodeModel = graph.graphModel.createNodeModel(node,
                         new org.joml.Vector2f(x, y));
                 nodeModel.setName(entry.name());
                 nodeModel.setTitle(Component.literal(entry.name()));
                 zoneModels.put(entry.name(), nodeModel);
-                idx++;
+                zoneIdx++;
             }
 
             // 建立连线

@@ -9,6 +9,7 @@ import com.lowdragmc.lowdraglib2.gui.ui.elements.Button;
 import com.lowdragmc.lowdraglib2.gui.ui.elements.Label;
 import com.lowdragmc.lowdraglib2.gui.ui.elements.TextField;
 import com.lowdragmc.lowdraglib2.gui.ui.styletemplate.Sprites;
+import com.xkmxz.attack_defense_capture_point_xkmxz.block.entity.CapturePointBlockEntity;
 import com.xkmxz.attack_defense_capture_point_xkmxz.manager.CaptureManager;
 import com.xkmxz.attack_defense_capture_point_xkmxz.manager.ICaptureDataAccess;
 import net.minecraft.client.Minecraft;
@@ -140,8 +141,7 @@ public final class CapturePointGraphDialogs {
                     Component.translatable(
                             isZone ? "toast.capture_zone.delete.success" : "toast.capture_point.delete.success",
                             name));
-            mc.setScreen(null);
-            new CapturePointGraphScreen(level).open();
+            reopen(level);
         });
 
         // 取消
@@ -1012,9 +1012,28 @@ public final class CapturePointGraphDialogs {
     }
 
     /**
-     * 重新打开节点图屏幕。
+     * 立即同步所有已加载城池方块实体（从 CaptureManager 获取最新渲染数据）。
+     * 在对话框修改 CaptureManager 数据后调用，保证方块及时更新。
+     */
+    private static void syncBlocks(Level level) {
+        if (level instanceof net.minecraft.server.level.ServerLevel sl) {
+            CapturePointBlockEntity.syncAllBoundBlocks(sl);
+            return;
+        }
+        var mc = Minecraft.getInstance();
+        if (mc.hasSingleplayerServer() && mc.getSingleplayerServer() != null) {
+            var sl = mc.getSingleplayerServer().getLevel(level.dimension());
+            if (sl != null) {
+                CapturePointBlockEntity.syncAllBoundBlocks(sl);
+            }
+        }
+    }
+
+    /**
+     * 重新打开节点图屏幕（同步方块后再打开）。
      */
     private static void reopen(Level level) {
+        syncBlocks(level);
         Minecraft.getInstance().setScreen(null);
         new CapturePointGraphScreen(level).open();
     }

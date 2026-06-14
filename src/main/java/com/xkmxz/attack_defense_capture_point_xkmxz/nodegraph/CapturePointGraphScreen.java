@@ -14,6 +14,7 @@ import com.lowdragmc.lowdraglib2.nodegraphtookit.model.INodeWithOptions;
 import com.lowdragmc.lowdraglib2.nodegraphtookit.model.node.NodeModel;
 import com.lowdragmc.lowdraglib2.nodegraphtookit.model.node.PortModel;
 import com.lowdragmc.lowdraglib2.nodegraphtookit.model.wire.WireModel;
+import com.xkmxz.attack_defense_capture_point_xkmxz.block.entity.CapturePointBlockEntity;
 import com.xkmxz.attack_defense_capture_point_xkmxz.manager.CaptureManager;
 import com.xkmxz.attack_defense_capture_point_xkmxz.manager.ICaptureDataAccess;
 import com.mojang.logging.LogUtils;
@@ -365,6 +366,13 @@ public class CapturePointGraphScreen {
 
             // 无冲突或非编辑模式：直接应用
             mgr.applyGraphSnapshot(newPoints, newZones);
+
+            // 立即同步所有已加载方块实体的渲染缓存
+            var serverLevel = getServerLevel();
+            if (serverLevel != null) {
+                CapturePointBlockEntity.syncAllBoundBlocks(serverLevel);
+            }
+
             ToastNotification.push(ToastNotification.Type.SUCCESS,
                     Component.translatable("toast.capture_point_graph.saved"));
 
@@ -410,6 +418,13 @@ public class CapturePointGraphScreen {
         overwriteBtn.layout(l -> l.flex(1).heightPercent(100));
         overwriteBtn.setOnClick(e -> {
             access.applyGraphSnapshot(newPoints, newZones);
+
+            // 立即同步所有已加载方块实体的渲染缓存
+            var sl = getServerLevel();
+            if (sl != null) {
+                CapturePointBlockEntity.syncAllBoundBlocks(sl);
+            }
+
             ToastNotification.push(ToastNotification.Type.SUCCESS,
                     Component.translatable("toast.capture_point_graph.saved"));
             mc.setScreen(null);

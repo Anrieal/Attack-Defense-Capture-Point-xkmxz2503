@@ -118,7 +118,7 @@ public class Attack_defense_capture_point_xkmxz {
     //  服务端 Tick 事件 — 周期性同步方块数据（安全网）
     // ================================================================
 
-    @EventBusSubscriber(modid = MODID)
+    @EventBusSubscriber(modid = MODID, bus = EventBusSubscriber.Bus.GAME)
     public static class ServerTickHandler {
         private static int tickCounter = 0;
         private static final int SYNC_INTERVAL = 40; // 每 40 tick (~2秒) 同步一次

@@ -1,8 +1,44 @@
 {
   "itemGroup.attack_defense_capture_point_xkmxz": "攻防战占领点",
   "block.attack_defense_capture_point_xkmxz.capture_point_block": "据点方块",
-  "gui.attack_defense_capture_point_xkmxz.capture_point.title": "据点",
-  "gui.attack_defense_capture_point_xkmxz.capture_point.info": "这是一个用于测试据点方块的 GUI。",
-  "gui.attack_defense_capture_point_xkmxz.capture_point.test_button": "测试按钮",
-  "gui.attack_defense_capture_point_xkmxz.capture_point.button_clicked": "按钮被点击了！"
+
+  "command.capturepoint.create.success": "已创建据点 '%s' 在 [%d, %d, %d]",
+  "command.capturepoint.remove.success": "已移除据点 '%s'",
+  "command.capturepoint.setowner.success": "已将据点 '%s' 的所属设为 '%s'",
+  "command.capturepoint.clearowner.success": "已清除据点 '%s' 的所属",
+  "command.capturepoint.error.player_only": "此命令必须由玩家执行",
+  "command.capturepoint.error.not_found": "未找到据点 '%s'",
+  "command.capturepoint.error.zone_exists": "区域 '%s' 已存在",
+  "command.capturepoint.error.zone_not_found": "未找到区域 '%s'",
+
+  "command.capturepoint.list.header": "=== 占领点状态 ===",
+  "command.capturepoint.list.no_points": "尚未注册任何据点。",
+  "command.capturepoint.list.no_zones": "尚未注册任何区域。",
+  "command.capturepoint.list.point_entry": "  - %s 在 [%d, %d, %d] 所属: %s",
+  "command.capturepoint.list.zone_entry": "  区域 %s [%s] 包含据点: %s",
+  "command.capturepoint.list.captured": "已占领",
+  "command.capturepoint.list.not_captured": "未占领",
+  "command.capturepoint.list.accessible": "可访问",
+  "command.capturepoint.list.locked": "已锁定",
+
+  "command.capturepoint.zone.create.success": "已创建区域 '%s'",
+  "command.capturepoint.zone.create_with_req.success": "已创建区域 '%s'（需要先占领 '%s'）",
+  "command.capturepoint.zone.remove.success": "已移除区域 '%s'",
+  "command.capturepoint.zone.addpoint.success": "已将 '%s' 添加到区域 '%s'",
+  "command.capturepoint.zone.removepoint.success": "已将 '%s' 从区域 '%s' 移除",
+  "command.capturepoint.zone.status_entry": "区域 %s [%s] [%s]",
+
+  "gui.attack_defense_capture_point_xkmxz.control_panel.title": "据点控制面板",
+  "gui.attack_defense_capture_point_xkmxz.control_panel.points_section": "--- 据点管理 ---",
+  "gui.attack_defense_capture_point_xkmxz.control_panel.zones_section": "--- 区域管理 ---",
+  "gui.attack_defense_capture_point_xkmxz.control_panel.quick_actions": "--- 快捷操作 ---",
+  "gui.attack_defense_capture_point_xkmxz.control_panel.create_at_pos": "在当前位置创建据点",
+  "gui.attack_defense_capture_point_xkmxz.control_panel.list_points": "列出所有据点/区域",
+  "gui.attack_defense_capture_point_xkmxz.control_panel.zone_status": "显示区域状态",
+  "gui.attack_defense_capture_point_xkmxz.control_panel.create_zone_a": "快速创建: 区域 A (A1, A2)",
+  "gui.attack_defense_capture_point_xkmxz.control_panel.create_zone_b": "快速创建: 区域 B (B1, B2, 需要 A)",
+  "gui.attack_defense_capture_point_xkmxz.control_panel.close": "关闭",
+  "gui.attack_defense_capture_point_xkmxz.control_panel.created_hint": "据点已创建！使用 /capturepoint list 查看。",
+  "gui.attack_defense_capture_point_xkmxz.control_panel.zone_created_hint": "区域设置完成！使用 /capturepoint zone status 查看。",
+  "gui.attack_defense_capture_point_xkmxz.control_panel.info_hint": "提示：使用命令进行高级管理。输入 /capturepoint 查看帮助。"
 }

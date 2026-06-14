@@ -1,8 +1,44 @@
 {
   "itemGroup.attack_defense_capture_point_xkmxz": "Attack Defense Capture Point",
   "block.attack_defense_capture_point_xkmxz.capture_point_block": "Capture Point Block",
-  "gui.attack_defense_capture_point_xkmxz.capture_point.title": "Capture Point",
-  "gui.attack_defense_capture_point_xkmxz.capture_point.info": "This is a test GUI for the capture point block.",
-  "gui.attack_defense_capture_point_xkmxz.capture_point.test_button": "Test Button",
-  "gui.attack_defense_capture_point_xkmxz.capture_point.button_clicked": "Button was clicked!"
+
+  "command.capturepoint.create.success": "Created capture point '%s' at [%d, %d, %d]",
+  "command.capturepoint.remove.success": "Removed capture point '%s'",
+  "command.capturepoint.setowner.success": "Set owner of '%s' to '%s'",
+  "command.capturepoint.clearowner.success": "Cleared owner of '%s'",
+  "command.capturepoint.error.player_only": "This command must be executed by a player",
+  "command.capturepoint.error.not_found": "Capture point '%s' not found",
+  "command.capturepoint.error.zone_exists": "Zone '%s' already exists",
+  "command.capturepoint.error.zone_not_found": "Zone '%s' not found",
+
+  "command.capturepoint.list.header": "=== Capture Point Status ===",
+  "command.capturepoint.list.no_points": "No capture points registered.",
+  "command.capturepoint.list.no_zones": "No zones registered.",
+  "command.capturepoint.list.point_entry": "  - %s at [%d, %d, %d] owner: %s",
+  "command.capturepoint.list.zone_entry": "  Zone %s [%s] points: %s",
+  "command.capturepoint.list.captured": "CAPTURED",
+  "command.capturepoint.list.not_captured": "NOT CAPTURED",
+  "command.capturepoint.list.accessible": "Accessible",
+  "command.capturepoint.list.locked": "Locked",
+
+  "command.capturepoint.zone.create.success": "Created zone '%s'",
+  "command.capturepoint.zone.create_with_req.success": "Created zone '%s' (requires '%s' captured first)",
+  "command.capturepoint.zone.remove.success": "Removed zone '%s'",
+  "command.capturepoint.zone.addpoint.success": "Added '%s' to zone '%s'",
+  "command.capturepoint.zone.removepoint.success": "Removed '%s' from zone '%s'",
+  "command.capturepoint.zone.status_entry": "Zone %s [%s] [%s]",
+
+  "gui.attack_defense_capture_point_xkmxz.control_panel.title": "Capture Point Control Panel",
+  "gui.attack_defense_capture_point_xkmxz.control_panel.points_section": "--- Capture Points ---",
+  "gui.attack_defense_capture_point_xkmxz.control_panel.zones_section": "--- Zones ---",
+  "gui.attack_defense_capture_point_xkmxz.control_panel.quick_actions": "--- Quick Actions ---",
+  "gui.attack_defense_capture_point_xkmxz.control_panel.create_at_pos": "Create Point at Current Position",
+  "gui.attack_defense_capture_point_xkmxz.control_panel.list_points": "List All Points / Zones",
+  "gui.attack_defense_capture_point_xkmxz.control_panel.zone_status": "Show Zone Status",
+  "gui.attack_defense_capture_point_xkmxz.control_panel.create_zone_a": "Quick Setup: Zone A (A1, A2)",
+  "gui.attack_defense_capture_point_xkmxz.control_panel.create_zone_b": "Quick Setup: Zone B (B1, B2, needs A)",
+  "gui.attack_defense_capture_point_xkmxz.control_panel.close": "Close",
+  "gui.attack_defense_capture_point_xkmxz.control_panel.created_hint": "Point created! Use /capturepoint list to see it.",
+  "gui.attack_defense_capture_point_xkmxz.control_panel.zone_created_hint": "Zone setup complete! Use /capturepoint zone status to check.",
+  "gui.attack_defense_capture_point_xkmxz.control_panel.info_hint": "Tip: Use commands for advanced management. Run /capturepoint for help."
 }

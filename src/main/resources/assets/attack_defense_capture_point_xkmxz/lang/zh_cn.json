@@ -1,6 +1,22 @@
 {
   "itemGroup.attack_defense_capture_point_xkmxz": "攻防战占领点",
   "block.attack_defense_capture_point_xkmxz.capture_point_block": "据点方块",
+  "item.attack_defense_capture_point_xkmxz.capture_point_manager": "据点管理器",
+
+  "command.capturepoint.help.header": "=== /capturepoint 命令帮助 ===",
+  "command.capturepoint.help.create": "/capturepoint create <名称> - 在当前位置创建据点",
+  "command.capturepoint.help.remove": "/capturepoint remove <名称> - 移除据点",
+  "command.capturepoint.help.setowner": "/capturepoint setowner <名称> <所属> - 设置据点所属",
+  "command.capturepoint.help.clearowner": "/capturepoint clearowner <名称> - 清除据点所属",
+  "command.capturepoint.help.list": "/capturepoint list - 列出所有据点和区域",
+  "command.capturepoint.help.zone_create": "/capturepoint zone create <名称> [依赖区域] - 创建区域",
+  "command.capturepoint.help.zone_remove": "/capturepoint zone remove <名称> - 移除区域",
+  "command.capturepoint.help.zone_addpoint": "/capturepoint zone addpoint <区域> <据点> - 将据点加入区域",
+  "command.capturepoint.help.zone_removepoint": "/capturepoint zone removepoint <区域> <据点> - 从区域移除据点",
+  "command.capturepoint.help.zone_status": "/capturepoint zone status - 查看区域状态",
+  "command.capturepoint.help.gui": "/capturepoint gui - 打开控制面板 GUI",
+
+  "command.capturepoint.gui.hint": "使用据点管理器物品或右键点击据点方块打开控制面板。",
 
   "command.capturepoint.create.success": "已创建据点 '%s' 在 [%d, %d, %d]",
   "command.capturepoint.remove.success": "已移除据点 '%s'",
@@ -27,6 +43,12 @@
   "command.capturepoint.zone.addpoint.success": "已将 '%s' 添加到区域 '%s'",
   "command.capturepoint.zone.removepoint.success": "已将 '%s' 从区域 '%s' 移除",
   "command.capturepoint.zone.status_entry": "区域 %s [%s] [%s]",
+
+  "gui.attack_defense_capture_point_xkmxz.block.info": "位置: [%d, %d, %d]",
+  "gui.attack_defense_capture_point_xkmxz.block.create_here": "在此创建据点",
+  "gui.attack_defense_capture_point_xkmxz.block.list_status": "查看当前状态",
+  "gui.attack_defense_capture_point_xkmxz.block.open_control_panel": "打开控制面板",
+  "gui.attack_defense_capture_point_xkmxz.block.close": "关闭",
 
   "gui.attack_defense_capture_point_xkmxz.control_panel.title": "据点控制面板",
   "gui.attack_defense_capture_point_xkmxz.control_panel.points_section": "--- 据点管理 ---",

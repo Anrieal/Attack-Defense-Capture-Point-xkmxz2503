@@ -1,6 +1,22 @@
 {
   "itemGroup.attack_defense_capture_point_xkmxz": "Attack Defense Capture Point",
   "block.attack_defense_capture_point_xkmxz.capture_point_block": "Capture Point Block",
+  "item.attack_defense_capture_point_xkmxz.capture_point_manager": "Capture Point Manager",
+
+  "command.capturepoint.help.header": "=== /capturepoint Commands ===",
+  "command.capturepoint.help.create": "/capturepoint create <name> - Create a point at your position",
+  "command.capturepoint.help.remove": "/capturepoint remove <name> - Remove a point",
+  "command.capturepoint.help.setowner": "/capturepoint setowner <name> <owner> - Set point owner",
+  "command.capturepoint.help.clearowner": "/capturepoint clearowner <name> - Clear point owner",
+  "command.capturepoint.help.list": "/capturepoint list - List all points and zones",
+  "command.capturepoint.help.zone_create": "/capturepoint zone create <name> [requires] - Create a zone",
+  "command.capturepoint.help.zone_remove": "/capturepoint zone remove <name> - Remove a zone",
+  "command.capturepoint.help.zone_addpoint": "/capturepoint zone addpoint <zone> <point> - Add point to zone",
+  "command.capturepoint.help.zone_removepoint": "/capturepoint zone removepoint <zone> <point> - Remove point from zone",
+  "command.capturepoint.help.zone_status": "/capturepoint zone status - Show zone status",
+  "command.capturepoint.help.gui": "/capturepoint gui - Open the control panel GUI",
+
+  "command.capturepoint.gui.hint": "Use the Capture Point Manager item or right-click a Capture Point Block.",
 
   "command.capturepoint.create.success": "Created capture point '%s' at [%d, %d, %d]",
   "command.capturepoint.remove.success": "Removed capture point '%s'",
@@ -27,6 +43,12 @@
   "command.capturepoint.zone.addpoint.success": "Added '%s' to zone '%s'",
   "command.capturepoint.zone.removepoint.success": "Removed '%s' from zone '%s'",
   "command.capturepoint.zone.status_entry": "Zone %s [%s] [%s]",
+
+  "gui.attack_defense_capture_point_xkmxz.block.info": "Position: [%d, %d, %d]",
+  "gui.attack_defense_capture_point_xkmxz.block.create_here": "Create Point Here",
+  "gui.attack_defense_capture_point_xkmxz.block.list_status": "List Current Status",
+  "gui.attack_defense_capture_point_xkmxz.block.open_control_panel": "Open Control Panel",
+  "gui.attack_defense_capture_point_xkmxz.block.close": "Close",
 
   "gui.attack_defense_capture_point_xkmxz.control_panel.title": "Capture Point Control Panel",
   "gui.attack_defense_capture_point_xkmxz.control_panel.points_section": "--- Capture Points ---",

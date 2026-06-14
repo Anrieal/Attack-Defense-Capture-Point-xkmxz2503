@@ -1,0 +1,6 @@
+{
+  "parent": "minecraft:item/generated",
+  "textures": {
+    "layer0": "attack_defense_capture_point_xkmxz:item/capture_point_manager"
+  }
+}

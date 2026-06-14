@@ -3,11 +3,13 @@ package com.xkmxz.attack_defense_capture_point_xkmxz;
 import com.xkmxz.attack_defense_capture_point_xkmxz.block.CapturePointBlock;
 import com.xkmxz.attack_defense_capture_point_xkmxz.block.entity.CapturePointBlockEntity;
 import com.xkmxz.attack_defense_capture_point_xkmxz.command.ModCommands;
+import com.xkmxz.attack_defense_capture_point_xkmxz.gui.CapturePointManagerItem;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.network.chat.Component;
 import net.minecraft.world.item.BlockItem;
 import net.minecraft.world.item.CreativeModeTab;
 import net.minecraft.world.item.CreativeModeTabs;
+import net.minecraft.world.item.Item;
 import net.minecraft.world.level.block.entity.BlockEntityType;
 import net.minecraft.world.level.block.state.BlockBehaviour;
 import net.neoforged.api.distmarker.Dist;
@@ -52,13 +54,17 @@ public class Attack_defense_capture_point_xkmxz {
                 return type;
             });
 
+    public static final DeferredItem<Item> CAPTURE_POINT_MANAGER_ITEM = ITEMS.register("capture_point_manager",
+            () -> new CapturePointManagerItem(new Item.Properties().stacksTo(1)));
+
     public static final DeferredHolder<CreativeModeTab, CreativeModeTab> CREATIVE_TAB = CREATIVE_MODE_TABS.register("tab",
             () -> CreativeModeTab.builder()
                     .title(Component.translatable("itemGroup." + MODID))
                     .withTabsBefore(CreativeModeTabs.SPAWN_EGGS)
-                    .icon(() -> CAPTURE_POINT_BLOCK_ITEM.get().getDefaultInstance())
+                    .icon(() -> CAPTURE_POINT_MANAGER_ITEM.get().getDefaultInstance())
                     .displayItems((params, output) -> {
                         output.accept(CAPTURE_POINT_BLOCK_ITEM.get());
+                        output.accept(CAPTURE_POINT_MANAGER_ITEM.get());
                     })
                     .build());
 

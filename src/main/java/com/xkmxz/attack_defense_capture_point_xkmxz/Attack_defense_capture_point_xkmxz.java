@@ -4,6 +4,8 @@ import com.xkmxz.attack_defense_capture_point_xkmxz.block.CapturePointBlock;
 import com.xkmxz.attack_defense_capture_point_xkmxz.block.entity.CapturePointBlockEntity;
 import com.xkmxz.attack_defense_capture_point_xkmxz.command.ModCommands;
 import com.xkmxz.attack_defense_capture_point_xkmxz.gui.CapturePointManagerItem;
+import com.xkmxz.attack_defense_capture_point_xkmxz.render.CapturePointBlockEntityRenderer;
+import net.minecraft.client.renderer.blockentity.BlockEntityRenderers;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.network.chat.Component;
 import net.minecraft.world.item.BlockItem;
@@ -102,6 +104,8 @@ public class Attack_defense_capture_point_xkmxz {
     public static class ClientModEvents {
         @SubscribeEvent
         public static void onClientSetup(FMLClientSetupEvent event) {
+            // 注册据点方块的范围轮廓渲染器
+            BlockEntityRenderers.register(CAPTURE_POINT_BE.get(), CapturePointBlockEntityRenderer::new);
         }
     }
 }

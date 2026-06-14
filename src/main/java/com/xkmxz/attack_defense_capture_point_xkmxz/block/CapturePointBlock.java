@@ -39,14 +39,13 @@ public class CapturePointBlock extends BaseEntityBlock {
 
     @Override
     protected InteractionResult useWithoutItem(BlockState state, Level level, BlockPos pos, Player player, BlockHitResult hitResult) {
-        if (!level.isClientSide) {
-            return InteractionResult.CONSUME;
+        if (level.isClientSide) {
+            // 客户端：打开方块功能菜单
+            if (level.getBlockEntity(pos) instanceof CapturePointBlockEntity be) {
+                be.openUI(player);
+            }
         }
-
-        if (level.getBlockEntity(pos) instanceof CapturePointBlockEntity be) {
-            be.openUI(player);
-        }
-
+        // 服务端/客户端都返回 SUCCESS，不阻止后续交互
         return InteractionResult.SUCCESS;
     }
 }

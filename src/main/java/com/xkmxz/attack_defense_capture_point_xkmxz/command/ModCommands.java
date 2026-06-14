@@ -1,6 +1,9 @@
 package com.xkmxz.attack_defense_capture_point_xkmxz.command;
 
 import com.mojang.brigadier.CommandDispatcher;
+import com.mojang.brigadier.arguments.BoolArgumentType;
+import com.mojang.brigadier.arguments.DoubleArgumentType;
+import com.mojang.brigadier.arguments.IntegerArgumentType;
 import com.mojang.brigadier.arguments.StringArgumentType;
 import com.mojang.brigadier.context.CommandContext;
 import com.mojang.brigadier.suggestion.Suggestions;
@@ -9,6 +12,7 @@ import com.xkmxz.attack_defense_capture_point_xkmxz.manager.CaptureManager;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.commands.Commands;
 import net.minecraft.commands.SharedSuggestionProvider;
+import net.minecraft.core.BlockPos;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ServerPlayer;
 
@@ -74,6 +78,37 @@ public class ModCommands {
                                                 .executes(ModCommands::removePointFromZone))))
                         .then(Commands.literal("status")
                                 .executes(ModCommands::zoneStatus)))
+
+
+                // ---- 方块相关命令 ----
+
+
+                .then(Commands.literal("createat")
+                        .then(Commands.argument("name", StringArgumentType.word())
+                                .then(Commands.argument("x", IntegerArgumentType.integer())
+                                        .then(Commands.argument("y", IntegerArgumentType.integer())
+                                                .then(Commands.argument("z", IntegerArgumentType.integer())
+                                                        .executes(ctx -> createPointAt(ctx, 5.0))
+                                                        .then(Commands.argument("radius", DoubleArgumentType.doubleArg(1, 100))
+                                                                .executes(ctx -> createPointAt(ctx, DoubleArgumentType.getDouble(ctx, "radius")))))))))
+
+                .then(Commands.literal("setradius")
+                        .then(Commands.argument("name", StringArgumentType.word())
+                                .suggests(ModCommands::suggestPoints)
+                                .then(Commands.argument("radius", DoubleArgumentType.doubleArg(1, 100))
+                                        .executes(ModCommands::setPointRadius))))
+
+                .then(Commands.literal("setcolor")
+                        .then(Commands.argument("name", StringArgumentType.word())
+                                .suggests(ModCommands::suggestPoints)
+                                .then(Commands.argument("color", IntegerArgumentType.integer(0, 0xFFFFFFFF))
+                                        .executes(ModCommands::setPointColor))))
+
+                .then(Commands.literal("settoggle")
+                        .then(Commands.argument("name", StringArgumentType.word())
+                                .suggests(ModCommands::suggestPoints)
+                                .then(Commands.argument("show", BoolArgumentType.bool())
+                                        .executes(ModCommands::togglePointRange))))
         );
     }
 
@@ -93,6 +128,10 @@ public class ModCommands {
         source.sendSuccess(() -> Component.translatable("command.capturepoint.help.zone_removepoint"), false);
         source.sendSuccess(() -> Component.translatable("command.capturepoint.help.zone_status"), false);
         source.sendSuccess(() -> Component.translatable("command.capturepoint.help.gui"), false);
+        source.sendSuccess(() -> Component.translatable("command.capturepoint.help.createat"), false);
+        source.sendSuccess(() -> Component.translatable("command.capturepoint.help.setradius"), false);
+        source.sendSuccess(() -> Component.translatable("command.capturepoint.help.setcolor"), false);
+        source.sendSuccess(() -> Component.translatable("command.capturepoint.help.settoggle"), false);
         return 1;
     }
 
@@ -309,6 +348,92 @@ public class ModCommands {
                     entry.name(),
                     Component.translatable(statusKey),
                     Component.translatable(accessKey)), false);
+        }
+        return 1;
+    }
+
+    // ---- Block-related commands ----
+
+    /**
+     * 在指定坐标创建据点（方块功能1用）。
+     */
+    private static int createPointAt(CommandContext<CommandSourceStack> ctx, double radius) {
+        var source = ctx.getSource();
+        var name = StringArgumentType.getString(ctx, "name");
+        var x = IntegerArgumentType.getInteger(ctx, "x");
+        var y = IntegerArgumentType.getInteger(ctx, "y");
+        var z = IntegerArgumentType.getInteger(ctx, "z");
+
+        var manager = CaptureManager.get(source.getLevel());
+
+        if (manager.getPoints().containsKey(name)) {
+            source.sendFailure(Component.translatable("command.capturepoint.error.point_exists", name));
+            return 0;
+        }
+
+        var pos = new BlockPos(x, y, z);
+        manager.addOrUpdatePointWithRadius(name, pos, radius);
+        source.sendSuccess(() -> Component.translatable("command.capturepoint.createat.success", name, x, y, z, (int) radius), true);
+        return 1;
+    }
+
+    /**
+     * 设置据点半径。
+     */
+    private static int setPointRadius(CommandContext<CommandSourceStack> ctx) {
+        var source = ctx.getSource();
+        var name = StringArgumentType.getString(ctx, "name");
+        var radius = DoubleArgumentType.getDouble(ctx, "radius");
+        var manager = CaptureManager.get(source.getLevel());
+
+        if (!manager.getPoints().containsKey(name)) {
+            source.sendFailure(Component.translatable("command.capturepoint.error.not_found", name));
+            return 0;
+        }
+
+        manager.setPointRadius(name, radius);
+        source.sendSuccess(() -> Component.translatable("command.capturepoint.setradius.success", name, (int) radius), true);
+        return 1;
+    }
+
+    /**
+     * 设置据点显示颜色。
+     */
+    private static int setPointColor(CommandContext<CommandSourceStack> ctx) {
+        var source = ctx.getSource();
+        var name = StringArgumentType.getString(ctx, "name");
+        var color = IntegerArgumentType.getInteger(ctx, "color");
+        var manager = CaptureManager.get(source.getLevel());
+
+        if (!manager.getPoints().containsKey(name)) {
+            source.sendFailure(Component.translatable("command.capturepoint.error.not_found", name));
+            return 0;
+        }
+
+        manager.setPointDisplayColor(name, color);
+        source.sendSuccess(() -> Component.translatable("command.capturepoint.setcolor.success", name, String.format("#%08X", color)), true);
+        return 1;
+    }
+
+    /**
+     * 切换据点范围显示。
+     */
+    private static int togglePointRange(CommandContext<CommandSourceStack> ctx) {
+        var source = ctx.getSource();
+        var name = StringArgumentType.getString(ctx, "name");
+        var show = BoolArgumentType.getBool(ctx, "show");
+        var manager = CaptureManager.get(source.getLevel());
+
+        if (!manager.getPoints().containsKey(name)) {
+            source.sendFailure(Component.translatable("command.capturepoint.error.not_found", name));
+            return 0;
+        }
+
+        manager.setPointShowRange(name, show);
+        if (show) {
+            source.sendSuccess(() -> Component.translatable("command.capturepoint.settoggle.on", name), true);
+        } else {
+            source.sendSuccess(() -> Component.translatable("command.capturepoint.settoggle.off", name), true);
         }
         return 1;
     }

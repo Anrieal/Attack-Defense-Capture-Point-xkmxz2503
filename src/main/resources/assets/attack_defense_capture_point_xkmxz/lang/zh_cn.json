@@ -15,6 +15,10 @@
   "command.capturepoint.help.zone_removepoint": "/capturepoint zone removepoint <区域> <据点> - 从区域移除据点",
   "command.capturepoint.help.zone_status": "/capturepoint zone status - 查看区域状态",
   "command.capturepoint.help.gui": "/capturepoint gui - 打开控制面板 GUI",
+  "command.capturepoint.help.createat": "/capturepoint createat <名称> <x> <y> <z> [半径] - 在坐标创建据点",
+  "command.capturepoint.help.setradius": "/capturepoint setradius <名称> <半径> - 设置据点半径",
+  "command.capturepoint.help.setcolor": "/capturepoint setcolor <名称> <颜色> - 设置据点显示颜色",
+  "command.capturepoint.help.settoggle": "/capturepoint settoggle <名称> <true/false> - 切换范围显示",
 
   "command.capturepoint.gui.hint": "使用据点管理器物品或右键点击据点方块打开控制面板。",
 
@@ -36,6 +40,14 @@
   "command.capturepoint.list.not_captured": "未占领",
   "command.capturepoint.list.accessible": "可访问",
   "command.capturepoint.list.locked": "已锁定",
+
+  "command.capturepoint.error.point_exists": "据点 '%s' 已存在",
+
+  "command.capturepoint.createat.success": "已在 [%d, %d, %d] 创建据点 '%s'，半径 %d",
+  "command.capturepoint.setradius.success": "已将据点 '%s' 的半径设为 %d",
+  "command.capturepoint.setcolor.success": "已将据点 '%s' 的显示颜色设为 %s",
+  "command.capturepoint.settoggle.on": "已启用据点 '%s' 的范围显示",
+  "command.capturepoint.settoggle.off": "已禁用据点 '%s' 的范围显示",
 
   "command.capturepoint.zone.create.success": "已创建区域 '%s'",
   "command.capturepoint.zone.create_with_req.success": "已创建区域 '%s'（需要先占领 '%s'）",
@@ -98,5 +110,40 @@
   "toast.capture_zone.create.success": "已创建占领区域 '%s'",
   "toast.capture_zone.create.empty": "区域名称不能为空",
   "toast.capture_zone.delete.success": "已删除区域 '%s'",
-  "toast.delete.name_missing": "删除失败：缺少名称信息"
+  "toast.delete.name_missing": "删除失败：缺少名称信息",
+
+  "gui.capture_point_block.menu.title": "据点方块控制面板",
+  "gui.capture_point_block.unbound": "[未绑定]",
+  "gui.capture_point_block.bound": "[已绑定: %s]",
+  "gui.capture_point_block.open_graph": "打开节点图编辑器",
+  "gui.capture_point_block.close": "关闭",
+  "gui.capture_point_block.func1": "[1] 创建并绑定据点",
+  "gui.capture_point_block.func2": "[2] 将据点绑定到区域",
+  "gui.capture_point_block.func3": "[3] 查看据点状态",
+  "gui.capture_point_block.func4": "[4] 设定据点半径",
+  "gui.capture_point_block.func5": "[5] 切换范围显示",
+
+  "gui.capture_point_block.dialog.radius.title": "设定据点半径",
+  "gui.capture_point_block.dialog.radius.label": "输入半径 (1-100):",
+  "gui.capture_point_block.dialog.color_picker": "选择显示颜色",
+  "gui.capture_point_block.dialog.color_picker.hint": "点击选择一个颜色。范围显示已开启。",
+  "gui.capture_point_block.dialog.disable_range": "关闭范围显示",
+  "gui.capture_point_block.dialog.select_zone": "选择一个区域:",
+
+  "toast.capture_point_block.already_bound": "已绑定到据点 '%s'",
+  "toast.capture_point_block.created": "已创建据点 '%s'",
+  "toast.capture_point_block.not_bound": "此方块未绑定任何据点，请先使用 [1] 创建",
+  "toast.capture_point_block.point_not_found": "在世界数据中未找到据点 '%s'",
+  "toast.capture_point_block.status_name": "名称: %s",
+  "toast.capture_point_block.status_pos": "位置: [%d, %d, %d]",
+  "toast.capture_point_block.status_owner": "所属: %s",
+  "toast.capture_point_block.status_radius": "半径: %d",
+  "toast.capture_point_block.status_range": "范围显示: %s",
+  "toast.capture_point_block.radius_invalid": "半径必须在 1 到 100 之间",
+  "toast.capture_point_block.radius_set": "半径已设为 %d",
+  "toast.capture_point_block.color_set": "显示颜色已更新",
+  "toast.capture_point_block.range_on": "范围显示已开启",
+  "toast.capture_point_block.range_off": "范围显示已关闭",
+  "toast.capture_point_block.bound_to_zone": "据点 '%s' 已添加到区域 '%s'",
+  "toast.capture_point_block.no_zones": "没有可用区域，请先在节点图编辑器中创建。"
 }

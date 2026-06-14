@@ -26,7 +26,11 @@ public class CaptureManager extends SavedData {
 
     // ---- Data Records ----
 
-    public record CapturePointEntry(String name, BlockPos pos, @Nullable String owner) {
+    public record CapturePointEntry(String name, BlockPos pos, @Nullable String owner,
+                                    double radius, int displayColor, boolean showRange) {
+        public static final double DEFAULT_RADIUS = 5.0;
+        public static final int DEFAULT_COLOR = 0xFFFF4444;
+
         public CompoundTag toNbt() {
             var tag = new CompoundTag();
             tag.putString("name", name);
@@ -34,6 +38,9 @@ public class CaptureManager extends SavedData {
             tag.putInt("y", pos.getY());
             tag.putInt("z", pos.getZ());
             if (owner != null) tag.putString("owner", owner);
+            tag.putDouble("radius", radius);
+            tag.putInt("displayColor", displayColor);
+            tag.putBoolean("showRange", showRange);
             return tag;
         }
 
@@ -41,11 +48,26 @@ public class CaptureManager extends SavedData {
             var name = tag.getString("name");
             var pos = new BlockPos(tag.getInt("x"), tag.getInt("y"), tag.getInt("z"));
             var owner = tag.contains("owner") ? tag.getString("owner") : null;
-            return new CapturePointEntry(name, pos, owner);
+            var radius = tag.contains("radius") ? tag.getDouble("radius") : DEFAULT_RADIUS;
+            var displayColor = tag.contains("displayColor") ? tag.getInt("displayColor") : DEFAULT_COLOR;
+            var showRange = tag.contains("showRange") && tag.getBoolean("showRange");
+            return new CapturePointEntry(name, pos, owner, radius, displayColor, showRange);
         }
 
         public CapturePointEntry withOwner(@Nullable String newOwner) {
-            return new CapturePointEntry(name, pos, newOwner);
+            return new CapturePointEntry(name, pos, newOwner, radius, displayColor, showRange);
+        }
+
+        public CapturePointEntry withRadius(double newRadius) {
+            return new CapturePointEntry(name, pos, owner, newRadius, displayColor, showRange);
+        }
+
+        public CapturePointEntry withDisplayColor(int newColor) {
+            return new CapturePointEntry(name, pos, owner, radius, newColor, showRange);
+        }
+
+        public CapturePointEntry withShowRange(boolean newShowRange) {
+            return new CapturePointEntry(name, pos, owner, radius, displayColor, newShowRange);
         }
     }
 
@@ -111,7 +133,14 @@ public class CaptureManager extends SavedData {
     }
 
     public void addOrUpdatePoint(String name, BlockPos pos) {
-        points.put(name, new CapturePointEntry(name, pos, null));
+        points.put(name, new CapturePointEntry(name, pos, null,
+                CapturePointEntry.DEFAULT_RADIUS, CapturePointEntry.DEFAULT_COLOR, false));
+        setDirty();
+    }
+
+    public void addOrUpdatePointWithRadius(String name, BlockPos pos, double radius) {
+        points.put(name, new CapturePointEntry(name, pos, null,
+                radius, CapturePointEntry.DEFAULT_COLOR, false));
         setDirty();
     }
 
@@ -124,6 +153,30 @@ public class CaptureManager extends SavedData {
         var existing = points.get(name);
         if (existing != null) {
             points.put(name, existing.withOwner(owner));
+            setDirty();
+        }
+    }
+
+    public void setPointRadius(String name, double radius) {
+        var existing = points.get(name);
+        if (existing != null) {
+            points.put(name, existing.withRadius(radius));
+            setDirty();
+        }
+    }
+
+    public void setPointDisplayColor(String name, int color) {
+        var existing = points.get(name);
+        if (existing != null) {
+            points.put(name, existing.withDisplayColor(color));
+            setDirty();
+        }
+    }
+
+    public void setPointShowRange(String name, boolean showRange) {
+        var existing = points.get(name);
+        if (existing != null) {
+            points.put(name, existing.withShowRange(showRange));
             setDirty();
         }
     }

@@ -15,6 +15,10 @@
   "command.capturepoint.help.zone_removepoint": "/capturepoint zone removepoint <zone> <point> - Remove point from zone",
   "command.capturepoint.help.zone_status": "/capturepoint zone status - Show zone status",
   "command.capturepoint.help.gui": "/capturepoint gui - Open the control panel GUI",
+  "command.capturepoint.help.createat": "/capturepoint createat <name> <x> <y> <z> [radius] - Create point at coordinates",
+  "command.capturepoint.help.setradius": "/capturepoint setradius <name> <radius> - Set point radius",
+  "command.capturepoint.help.setcolor": "/capturepoint setcolor <name> <color> - Set point display color",
+  "command.capturepoint.help.settoggle": "/capturepoint settoggle <name> <true/false> - Toggle range display",
 
   "command.capturepoint.gui.hint": "Use the Capture Point Manager item or right-click a Capture Point Block.",
 
@@ -36,6 +40,14 @@
   "command.capturepoint.list.not_captured": "NOT CAPTURED",
   "command.capturepoint.list.accessible": "Accessible",
   "command.capturepoint.list.locked": "Locked",
+
+  "command.capturepoint.error.point_exists": "Capture point '%s' already exists",
+
+  "command.capturepoint.createat.success": "Created capture point '%s' at [%d, %d, %d] with radius %d",
+  "command.capturepoint.setradius.success": "Set radius of '%s' to %d",
+  "command.capturepoint.setcolor.success": "Set display color of '%s' to %s",
+  "command.capturepoint.settoggle.on": "Range display enabled for '%s'",
+  "command.capturepoint.settoggle.off": "Range display disabled for '%s'",
 
   "command.capturepoint.zone.create.success": "Created zone '%s'",
   "command.capturepoint.zone.create_with_req.success": "Created zone '%s' (requires '%s' captured first)",
@@ -98,5 +110,40 @@
   "toast.capture_zone.create.success": "Created capture zone '%s'",
   "toast.capture_zone.create.empty": "Zone name cannot be empty",
   "toast.capture_zone.delete.success": "Deleted zone '%s'",
-  "toast.delete.name_missing": "Cannot delete: name is missing"
+  "toast.delete.name_missing": "Cannot delete: name is missing",
+
+  "gui.capture_point_block.menu.title": "Capture Point Block",
+  "gui.capture_point_block.unbound": "[Unbound]",
+  "gui.capture_point_block.bound": "[Bound: %s]",
+  "gui.capture_point_block.open_graph": "Open Graph Editor",
+  "gui.capture_point_block.close": "Close",
+  "gui.capture_point_block.func1": "[1] Create & Bind Point Here",
+  "gui.capture_point_block.func2": "[2] Bind Point to Zone",
+  "gui.capture_point_block.func3": "[3] View Point Status",
+  "gui.capture_point_block.func4": "[4] Set Point Radius",
+  "gui.capture_point_block.func5": "[5] Toggle Range Display",
+
+  "gui.capture_point_block.dialog.radius.title": "Set Point Radius",
+  "gui.capture_point_block.dialog.radius.label": "Enter radius (1-100):",
+  "gui.capture_point_block.dialog.color_picker": "Select Display Color",
+  "gui.capture_point_block.dialog.color_picker.hint": "Click a color to select. Range display is ON.",
+  "gui.capture_point_block.dialog.disable_range": "Disable Range",
+  "gui.capture_point_block.dialog.select_zone": "Select a Zone:",
+
+  "toast.capture_point_block.already_bound": "Already bound to '%s'",
+  "toast.capture_point_block.created": "Created capture point '%s'",
+  "toast.capture_point_block.not_bound": "This block is not bound to any point. Use [1] first.",
+  "toast.capture_point_block.point_not_found": "Point '%s' not found in world data",
+  "toast.capture_point_block.status_name": "Name: %s",
+  "toast.capture_point_block.status_pos": "Position: [%d, %d, %d]",
+  "toast.capture_point_block.status_owner": "Owner: %s",
+  "toast.capture_point_block.status_radius": "Radius: %d",
+  "toast.capture_point_block.status_range": "Range Display: %s",
+  "toast.capture_point_block.radius_invalid": "Radius must be between 1 and 100",
+  "toast.capture_point_block.radius_set": "Radius set to %d",
+  "toast.capture_point_block.color_set": "Display color updated",
+  "toast.capture_point_block.range_on": "Range display enabled",
+  "toast.capture_point_block.range_off": "Range display disabled",
+  "toast.capture_point_block.bound_to_zone": "Point '%s' added to zone '%s'",
+  "toast.capture_point_block.no_zones": "No zones available. Create one in the Graph Editor first."
 }

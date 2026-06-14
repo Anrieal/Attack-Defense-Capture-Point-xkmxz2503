@@ -179,6 +179,7 @@
   "toast.capture_point_block.range_off": "Range display disabled",
   "toast.capture_point_block.bound_to_zone": "Point '%s' added to zone '%s'",
   "toast.capture_point_block.no_zones": "No zones available. Create one in the Graph Editor first.",
+  "toast.capture_point_block.server_only": "Zone list requires server data. Use /capturepoint commands in multiplayer.",
   "toast.capture_point_block.unbind_block": "Block unbinded from point",
   "toast.capture_point_block.unbind_zone": "Point '%s' removed from its zone",
 

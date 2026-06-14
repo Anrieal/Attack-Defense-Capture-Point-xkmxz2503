@@ -4,6 +4,7 @@ import com.xkmxz.attack_defense_capture_point_xkmxz.block.CapturePointBlock;
 import com.xkmxz.attack_defense_capture_point_xkmxz.block.entity.CapturePointBlockEntity;
 import com.xkmxz.attack_defense_capture_point_xkmxz.command.ModCommands;
 import com.xkmxz.attack_defense_capture_point_xkmxz.gui.CapturePointManagerItem;
+import com.xkmxz.attack_defense_capture_point_xkmxz.network.BlockEntityActionPayload;
 import com.xkmxz.attack_defense_capture_point_xkmxz.render.CapturePointBlockEntityRenderer;
 import net.minecraft.client.renderer.blockentity.BlockEntityRenderers;
 import net.minecraft.core.registries.Registries;
@@ -27,6 +28,8 @@ import net.neoforged.neoforge.common.NeoForge;
 import net.neoforged.neoforge.event.BuildCreativeModeTabContentsEvent;
 import net.neoforged.neoforge.event.RegisterCommandsEvent;
 import net.neoforged.neoforge.event.server.ServerStartingEvent;
+import net.neoforged.neoforge.network.event.RegisterPayloadHandlersEvent;
+import net.neoforged.neoforge.network.registration.PayloadRegistrar;
 import net.neoforged.neoforge.registries.DeferredBlock;
 import net.neoforged.neoforge.registries.DeferredHolder;
 import net.neoforged.neoforge.registries.DeferredItem;
@@ -72,6 +75,7 @@ public class Attack_defense_capture_point_xkmxz {
 
     public Attack_defense_capture_point_xkmxz(IEventBus modEventBus, ModContainer modContainer) {
         modEventBus.addListener(this::commonSetup);
+        modEventBus.addListener(this::registerPayloadHandlers);
 
         BLOCKS.register(modEventBus);
         ITEMS.register(modEventBus);
@@ -85,6 +89,16 @@ public class Attack_defense_capture_point_xkmxz {
         NeoForge.EVENT_BUS.addListener((RegisterCommandsEvent event) -> ModCommands.register(event.getDispatcher()));
 
         modContainer.registerConfig(ModConfig.Type.COMMON, Config.SPEC);
+    }
+
+    /** 注册网络包处理器 — 客户端→服务端严格分离 */
+    private void registerPayloadHandlers(RegisterPayloadHandlersEvent event) {
+        var registrar = event.registrar(MODID).versioned("1.0");
+        registrar.playToServer(
+                BlockEntityActionPayload.TYPE,
+                BlockEntityActionPayload.STREAM_CODEC,
+                BlockEntityActionPayload::handleOnServer
+        );
     }
 
     private void commonSetup(final FMLCommonSetupEvent event) {

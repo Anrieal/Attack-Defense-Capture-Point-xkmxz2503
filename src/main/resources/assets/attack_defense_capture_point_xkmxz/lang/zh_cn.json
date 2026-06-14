@@ -179,6 +179,7 @@
   "toast.capture_point_block.range_off": "范围显示已关闭",
   "toast.capture_point_block.bound_to_zone": "据点 '%s' 已添加到区域 '%s'",
   "toast.capture_point_block.no_zones": "没有可用区域，请先在节点图编辑器中创建。",
+  "toast.capture_point_block.server_only": "区域列表需要服务端数据，联机模式下请使用 /capturepoint 命令。",
   "toast.capture_point_block.unbind_block": "已移除此方块与据点的绑定",
   "toast.capture_point_block.unbind_zone": "已将据点 '%s' 从区域中移除",
 

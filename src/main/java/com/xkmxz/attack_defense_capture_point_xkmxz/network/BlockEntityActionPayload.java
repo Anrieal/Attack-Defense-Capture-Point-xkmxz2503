@@ -68,6 +68,10 @@ public record BlockEntityActionPayload(
                     String name = parts[0];
                     if (!name.isEmpty() && !access.getPoints().containsKey(name)) {
                         access.addOrUpdatePoint(name, payload.blockPos());
+                        // 设置服务端方块实体的绑定名（否则存盘会丢失绑定）
+                        if (serverLevel.getBlockEntity(payload.blockPos()) instanceof CapturePointBlockEntity be) {
+                            be.setBoundPointNameFromServer(name);
+                        }
                     }
                 }
                 case "create_point_at" -> {
@@ -79,6 +83,10 @@ public record BlockEntityActionPayload(
                             int z = Integer.parseInt(parts[3]);
                             double rad = Double.parseDouble(parts[4]);
                             access.addOrUpdatePointWithRadius(name, new BlockPos(x, y, z), rad);
+                            // 设置服务端方块实体的绑定名（否则存盘会丢失绑定）
+                            if (serverLevel.getBlockEntity(payload.blockPos()) instanceof CapturePointBlockEntity be) {
+                                be.setBoundPointNameFromServer(name);
+                            }
                         } catch (NumberFormatException ignored) {}
                     }
                 }

@@ -3,6 +3,8 @@ package com.xkmxz.attack_defense_capture_point_xkmxz.nodegraph;
 import com.lowdragmc.lowdraglib2.gui.texture.IGuiTexture;
 import com.lowdragmc.lowdraglib2.gui.texture.ColorRectTexture;
 import com.lowdragmc.lowdraglib2.nodegraphtookit.api.node.Node;
+import com.lowdragmc.lowdraglib2.nodegraphtookit.api.port.PortCapacity;
+import com.lowdragmc.lowdraglib2.nodegraphtookit.model.node.PortModel;
 import com.lowdragmc.lowdraglib2.nodegraphtookit.model.node.definition.IPortDefinitionContext;
 import com.lowdragmc.lowdraglib2.nodegraphtookit.model.node.definition.IOptionDefinitionContext;
 import net.minecraft.network.chat.Component;
@@ -63,10 +65,11 @@ public class CaptureZoneNode extends Node {
     @Override
     public void onDefinePorts(IPortDefinitionContext context) {
         super.onDefinePorts(context);
-        // 输入端口 - 接收据点信号（多个据点可通过此端口加入区域）
-        context.addInputPort("point_in", CapturePointTypes.POINT_SIGNAL)
+        // 输入端口 - 接收据点信号（多个据点可通过此端口加入区域，支持多连线）
+        var pointInPort = (PortModel) context.addInputPort("point_in", CapturePointTypes.POINT_SIGNAL)
                 .withDisplayName(Component.translatable("node.capture_zone.port.point_in"))
                 .build();
+        pointInPort.setPortCapacity(PortCapacity.MULTIPLE); // 允许多个据点连线到此端口
         // 输出端口 - 发出区域信号（连接到其他区域的 required_zone 输入，表示区域先后关系）
         context.addOutputPort("zone_out", CapturePointTypes.ZONE_SIGNAL)
                 .withDisplayName(Component.translatable("node.capture_zone.port.zone_out"))

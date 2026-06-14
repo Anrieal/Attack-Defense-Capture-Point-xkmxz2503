@@ -214,9 +214,8 @@ public class CapturePointGraphScreen {
      * 读取所有节点模型中的选项值，同时解析连线（wire）关系，
      * 构造新的 points/zones 映射。
      * <p>
-     * <b>关键修复</b>：区域包含的据点列表优先从连线（wire）中解析，
-     * 而非仅依赖节点选项 edit_points（该选项仅由 {@link #syncZoneOptions} 
-     * 从 CaptureManager 同步时填充，新建连线后可能尚未更新）。
+     * 区域包含的据点列表优先从连线解析（point_in 端口已设为 MULTIPLE，
+     * 支持多个据点连线到同一区域），回退到 edit_points 选项。
      */
     private Map.Entry<Map<String, CaptureManager.CapturePointEntry>, Map<String, CaptureManager.ZoneEntry>> buildSnapshotFromGraph() {
         var newPoints = new LinkedHashMap<String, CaptureManager.CapturePointEntry>();

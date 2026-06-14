@@ -8,6 +8,7 @@ import com.lowdragmc.lowdraglib2.gui.ui.UIElement;
 import com.lowdragmc.lowdraglib2.gui.ui.elements.Button;
 import com.lowdragmc.lowdraglib2.gui.ui.elements.Label;
 import com.lowdragmc.lowdraglib2.gui.ui.styletemplate.Sprites;
+import com.lowdragmc.lowdraglib2.nodegraphtookit.api.IFieldValueConfigurable;
 import com.lowdragmc.lowdraglib2.nodegraphtookit.model.GraphElementModel;
 import com.lowdragmc.lowdraglib2.nodegraphtookit.model.INodeWithOptions;
 import com.lowdragmc.lowdraglib2.nodegraphtookit.model.node.NodeModel;
@@ -76,6 +77,8 @@ public class CapturePointGraphScreen {
         loadDataToGraph();
         // 初始立即同步节点选项数据
         refreshNodeTitles();
+        // 注册选项值变更监听器，实现 GUI→Game 实时回写
+        registerOptionChangeListeners();
 
         var ui = ModularUI.of(UI.of(root));
         mc.setScreen(new ModularUIScreen(ui,
@@ -380,11 +383,15 @@ public class CapturePointGraphScreen {
     }
 
     // ================================================================
-    //  实时刷新节点标题（由 screenTick 每 ~0.75 秒驱动）
+    //  实时刷新节点标题和选项（由 screenTick 每 ~0.75 秒驱动）
     // ================================================================
 
+    /** 同步锁：当为 true 时，来自 Game→GUI 的同步不触发 GUI→Game 回写 */
+    private boolean isSyncingFromGame = false;
+
     /**
-     * 从 CaptureManager 读取最新数据，更新所有节点标题以反映真实状态。
+     * 从 CaptureManager 读取最新数据，更新所有节点标题和选项以反映真实状态。
+     * 使用 IFieldValueConfigurable.setValue() 正确推送值到 Constant，从而自动更新 UI。
      */
     public void refreshNodeTitles() {
         try {
@@ -394,37 +401,61 @@ public class CapturePointGraphScreen {
             var points = mgr.getPoints();
             var zones = mgr.getZones();
 
-            for (var element : graph.graphModel.getGraphElementModels()) {
-                if (element instanceof NodeModel nm) {
-                    String name = nm.getName();
-                    if (name == null || name.isEmpty()) continue;
+            isSyncingFromGame = true;
+            try {
+                for (var element : graph.graphModel.getGraphElementModels()) {
+                    if (element instanceof NodeModel nm) {
+                        String name = nm.getName();
+                        if (name == null || name.isEmpty()) continue;
 
-                    if (hasOutputPort(nm, "point_signal")) {
-                        // 据点节点：显示名称 + 所有者
-                        var entry = points.get(name);
-                        if (entry != null) {
-                            String owner = entry.owner() != null ? entry.owner() : "none";
-                            nm.setTitle(Component.literal(name + " [" + owner + "]"));
-                            // 同步选项卡数据
-                            syncPointOptions(nm, entry);
-                        } else {
-                            nm.setTitle(Component.literal(name));
+                        if (hasOutputPort(nm, "point_signal")) {
+                            // 据点节点：显示名称 + 所有者
+                            var entry = points.get(name);
+                            if (entry != null) {
+                                String owner = entry.owner() != null ? entry.owner() : "none";
+                                nm.setTitle(Component.literal(name + " [" + owner + "]"));
+                                // 同步选项数据
+                                syncPointOptions(nm, entry, mgr.isZoneCaptured(name));
+                            } else {
+                                nm.setTitle(Component.literal(name));
+                            }
+                        } else if (hasOutputPort(nm, "zone_out") || hasInputPort(nm, "point_in")) {
+                            // 区域节点：显示名称 + 占领状态 + 点数
+                            var entry = zones.get(name);
+                            if (entry != null) {
+                                boolean captured = mgr.isZoneCaptured(name);
+                                boolean accessible = mgr.canAccessZone(name);
+                                int ptCount = entry.capturePoints().size();
+                                String status = captured ? "✓" : "✗";
+                                String access = accessible ? "" : " 🔒";
+                                nm.setTitle(Component.literal(name + " [" + status + " " + ptCount + "pts" + access + "]"));
+                                // 同步选项数据
+                                syncZoneOptions(nm, entry, captured);
+                            } else {
+                                nm.setTitle(Component.literal(name));
+                            }
                         }
-                    } else if (hasOutputPort(nm, "zone_out") || hasInputPort(nm, "point_in")) {
-                        // 区域节点：显示名称 + 占领状态 + 点数
-                        var entry = zones.get(name);
-                        if (entry != null) {
-                            boolean captured = mgr.isZoneCaptured(name);
-                            boolean accessible = mgr.canAccessZone(name);
-                            int ptCount = entry.capturePoints().size();
-                            String status = captured ? "✓" : "✗";
-                            String access = accessible ? "" : " 🔒";
-                            nm.setTitle(Component.literal(name + " [" + status + " " + ptCount + "pts" + access + "]"));
-                            // 同步选项卡数据
-                            syncZoneOptions(nm, entry, captured);
-                        } else {
-                            nm.setTitle(Component.literal(name));
-                        }
+                    }
+                }
+            } finally {
+                isSyncingFromGame = false;
+            }
+        } catch (Exception ignored) {}
+    }
+
+    /**
+     * 通过 IFieldValueConfigurable API 正确设置节点选项值。
+     * 这比反射可靠得多，会通过 Constant 更新值并自动刷新 UI。
+     */
+    private static void setOptionValue(NodeModel nm, String optionId, Object value) {
+        try {
+            if (nm instanceof INodeWithOptions opts) {
+                var opt = opts.getNodeOptionById(optionId);
+                // NodeOption 是 INodeOption 的实现类，包含 portModel 字段
+                if (opt instanceof com.lowdragmc.lowdraglib2.nodegraphtookit.model.node.NodeOption nodeOpt) {
+                    var port = nodeOpt.getPortModel();
+                    if (port instanceof IFieldValueConfigurable configurable) {
+                        configurable.setValue(value);
                     }
                 }
             }
@@ -432,75 +463,75 @@ public class CapturePointGraphScreen {
     }
 
     /**
-     * 同步据点节点选项（owner / position / captured）
+     * 同步据点节点选项（captured / owner / position）
      */
-    private static void syncPointOptions(NodeModel nm, CaptureManager.CapturePointEntry entry) {
-        if (!(nm instanceof INodeWithOptions opts)) return;
-        try {
-            trySetNodeOption(opts, "owner", entry.owner() != null ? entry.owner() : "");
-            trySetNodeOption(opts, "position", entry.pos().getX() + ", " + entry.pos().getY() + ", " + entry.pos().getZ());
-            tryAnySetter(opts.getNodeOptionById("owner"), entry.owner() != null ? entry.owner() : "");
-            tryAnySetter(opts.getNodeOptionById("position"), entry.pos().getX() + ", " + entry.pos().getY() + ", " + entry.pos().getZ());
-        } catch (Exception ignored) {}
+    private static void syncPointOptions(NodeModel nm, CaptureManager.CapturePointEntry entry, boolean isCaptured) {
+        setOptionValue(nm, "captured", isCaptured);
+        setOptionValue(nm, "owner", entry.owner() != null ? entry.owner() : "");
+        setOptionValue(nm, "position", entry.pos().getX() + ", " + entry.pos().getY() + ", " + entry.pos().getZ());
     }
 
     /**
      * 同步区域节点选项（captured / required_zone / points）
      */
     private static void syncZoneOptions(NodeModel nm, CaptureManager.ZoneEntry entry, boolean captured) {
-        if (!(nm instanceof INodeWithOptions opts)) return;
-        try {
-            trySetNodeOption(opts, "captured", captured);
-            trySetNodeOption(opts, "required_zone", entry.requiredZone() != null ? entry.requiredZone() : "");
-            trySetNodeOption(opts, "points", String.join(", ", entry.capturePoints()));
-            tryAnySetter(opts.getNodeOptionById("captured"), captured);
-            tryAnySetter(opts.getNodeOptionById("required_zone"), entry.requiredZone() != null ? entry.requiredZone() : "");
-            tryAnySetter(opts.getNodeOptionById("points"), String.join(", ", entry.capturePoints()));
-        } catch (Exception ignored) {}
+        setOptionValue(nm, "captured", captured);
+        setOptionValue(nm, "required_zone", entry.requiredZone() != null ? entry.requiredZone() : "");
+        setOptionValue(nm, "points", String.join(", ", entry.capturePoints()));
     }
 
+    // ================================================================
+    //  GUI→Game 回写机制
+    // ================================================================
+
     /**
-     * 尝试在 INodeWithOptions 上直接调用双向 setter（无方法名过滤）。
+     * 为所有节点选项的常量注册值变更监听器。
+     * 当用户在 UI 中编辑选项（如修改 owner）时，自动写回 CaptureManager。
+     * 配合 isSyncingFromGame 锁避免 Game→GUI 同步时触发回写造成循环。
      */
-    private static void trySetNodeOption(INodeWithOptions opts, String id, Object value) {
+    private void registerOptionChangeListeners() {
         try {
-            for (var method : opts.getClass().getMethods()) {
-                if (method.getParameterCount() == 2
-                        && method.getParameterTypes()[0] == String.class
-                        && method.getParameterTypes()[1].isAssignableFrom(value != null ? value.getClass() : Object.class)) {
-                    method.setAccessible(true);
-                    method.invoke(opts, id, value);
-                    return;
+            var mgr = getServerCaptureManager();
+            if (mgr == null) return;
+
+            for (var element : graph.graphModel.getGraphElementModels()) {
+                if (element instanceof NodeModel nm) {
+                    String name = nm.getName();
+                    if (name == null || name.isEmpty()) continue;
+
+                    boolean isPointNode = hasOutputPort(nm, "point_signal");
+                    for (var opt : nm.getNodeOptions()) {
+                        var port = opt.getPortModel();
+                        var constant = port.getConfigurableConstant();
+                        if (constant != null) {
+                            var optId = opt.getId(); // 捕获变量
+                            constant.addListener(newValue -> {
+                                // 正在从游戏同步时不触发回写
+                                if (isSyncingFromGame) return;
+                                onOptionValueChanged(mgr, name, isPointNode, optId, newValue);
+                            });
+                        }
+                    }
                 }
             }
         } catch (Exception ignored) {}
     }
 
     /**
-     * 尝试在 INodeOption 上调用任意单参数方法（无方法名过滤）。
-     * 也尝试 2 参数方法 setValue(v, false) 模式。
+     * 当节点选项值被用户编辑时调用，将变更写回 CaptureManager。
      */
-    private static void tryAnySetter(Object option, Object value) {
-        if (option == null) return;
+    private void onOptionValueChanged(CaptureManager mgr, String nodeName, boolean isPointNode,
+                                       String optionId, Object newValue) {
         try {
-            var cls = option.getClass();
-            for (var method : cls.getMethods()) {
-                int pc = method.getParameterCount();
-                Class<?> pt = pc > 0 ? method.getParameterTypes()[0] : null;
-                if (pc == 1 && pt != null && (pt == Object.class || pt == String.class || pt == Boolean.class
-                        || pt == boolean.class || (value != null && pt.isAssignableFrom(value.getClass())))) {
-                    method.setAccessible(true);
-                    method.invoke(option, value);
-                    return;
+            if (isPointNode) {
+                // 据点节点：owner 可编辑，其他字段只读
+                if ("owner".equals(optionId)) {
+                    String ownerStr = newValue instanceof String s ? s.trim() : "";
+                    mgr.setPointOwner(nodeName, ownerStr.isEmpty() ? null : ownerStr);
                 }
-                if (pc == 2 && pt != null && (pt == Object.class || pt == String.class || pt == Boolean.class
-                        || pt == boolean.class || (value != null && pt.isAssignableFrom(value.getClass())))) {
-                    if (method.getParameterTypes()[1] == boolean.class) {
-                        method.setAccessible(true);
-                        method.invoke(option, value, false);
-                        return;
-                    }
-                }
+            } else {
+                // 区域节点：required_zone 可编辑（通过连线管理），其他字段只读
+                // required_zone 通过连线机制管理，不在文本框中直接编辑
             }
         } catch (Exception ignored) {}
     }

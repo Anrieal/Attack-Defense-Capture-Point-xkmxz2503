@@ -10,7 +10,7 @@ import net.minecraft.network.chat.Component;
 /**
  * 据点节点 - 代表一个占领点。
  * 具有一个输出端口（point_signal），可连接到 CaptureZoneNode 的输入端口。
- * 有一个可编辑的 owner 选项。
+ * 选项：owner（可编辑）、position（只读显示）、captured（只读显示）。
  */
 public class CapturePointNode extends Node {
 
@@ -30,7 +30,13 @@ public class CapturePointNode extends Node {
     @Override
     public void onDefineOptions(IOptionDefinitionContext context) {
         super.onDefineOptions(context);
-        // owner 选项 - 字符串类型
+        // captured 状态选项（只读）
+        context.addOption("captured", Boolean.class)
+                .withDefaultValue(false)
+                .withDisplayName(Component.translatable("node.capture_point.option.captured"))
+                .withoutConfigurator() // 不在节点体内显示，仅在检查器显示
+                .build();
+        // owner 选项 - 字符串类型（可编辑）
         context.addOption("owner", String.class)
                 .withDefaultValue("")
                 .withDisplayName(Component.translatable("node.capture_point.option.owner"))

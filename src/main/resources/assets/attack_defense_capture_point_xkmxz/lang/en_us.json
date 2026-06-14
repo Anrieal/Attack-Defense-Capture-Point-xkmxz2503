@@ -50,17 +50,14 @@
   "gui.attack_defense_capture_point_xkmxz.block.open_control_panel": "Open Control Panel",
   "gui.attack_defense_capture_point_xkmxz.block.close": "Close",
 
-  "gui.attack_defense_capture_point_xkmxz.control_panel.title": "Capture Point Control Panel",
-  "gui.attack_defense_capture_point_xkmxz.control_panel.points_section": "--- Capture Points ---",
-  "gui.attack_defense_capture_point_xkmxz.control_panel.zones_section": "--- Zones ---",
-  "gui.attack_defense_capture_point_xkmxz.control_panel.quick_actions": "--- Quick Actions ---",
-  "gui.attack_defense_capture_point_xkmxz.control_panel.create_at_pos": "Create Point at Current Position",
-  "gui.attack_defense_capture_point_xkmxz.control_panel.list_points": "List All Points / Zones",
-  "gui.attack_defense_capture_point_xkmxz.control_panel.zone_status": "Show Zone Status",
-  "gui.attack_defense_capture_point_xkmxz.control_panel.create_zone_a": "Quick Setup: Zone A (A1, A2)",
-  "gui.attack_defense_capture_point_xkmxz.control_panel.create_zone_b": "Quick Setup: Zone B (B1, B2, needs A)",
-  "gui.attack_defense_capture_point_xkmxz.control_panel.close": "Close",
-  "gui.attack_defense_capture_point_xkmxz.control_panel.created_hint": "Point created! Use /capturepoint list to see it.",
-  "gui.attack_defense_capture_point_xkmxz.control_panel.zone_created_hint": "Zone setup complete! Use /capturepoint zone status to check.",
-  "gui.attack_defense_capture_point_xkmxz.control_panel.info_hint": "Tip: Use commands for advanced management. Run /capturepoint for help."
+  "gui.attack_defense_capture_point_xkmxz.graph.title": "Capture Point Graph Editor",
+  "gui.attack_defense_capture_point_xkmxz.graph.zone_deps": "=== Zone Dependency Graph ===",
+  "gui.attack_defense_capture_point_xkmxz.graph.zoom": "Zoom",
+  "gui.attack_defense_capture_point_xkmxz.graph.btn_edit_relations": "Show Relations",
+  "gui.attack_defense_capture_point_xkmxz.graph.btn_setup_example": "Setup Example (A→B)",
+  "gui.attack_defense_capture_point_xkmxz.graph.btn_show_status": "Show Status",
+  "gui.attack_defense_capture_point_xkmxz.graph.btn_create_point": "Create Point",
+  "gui.attack_defense_capture_point_xkmxz.graph.btn_create_zone": "Create Zone",
+  "gui.attack_defense_capture_point_xkmxz.graph.btn_refresh": "Refresh",
+  "gui.attack_defense_capture_point_xkmxz.graph.btn_close": "Close"
 }

@@ -50,17 +50,14 @@
   "gui.attack_defense_capture_point_xkmxz.block.open_control_panel": "打开控制面板",
   "gui.attack_defense_capture_point_xkmxz.block.close": "关闭",
 
-  "gui.attack_defense_capture_point_xkmxz.control_panel.title": "据点控制面板",
-  "gui.attack_defense_capture_point_xkmxz.control_panel.points_section": "--- 据点管理 ---",
-  "gui.attack_defense_capture_point_xkmxz.control_panel.zones_section": "--- 区域管理 ---",
-  "gui.attack_defense_capture_point_xkmxz.control_panel.quick_actions": "--- 快捷操作 ---",
-  "gui.attack_defense_capture_point_xkmxz.control_panel.create_at_pos": "在当前位置创建据点",
-  "gui.attack_defense_capture_point_xkmxz.control_panel.list_points": "列出所有据点/区域",
-  "gui.attack_defense_capture_point_xkmxz.control_panel.zone_status": "显示区域状态",
-  "gui.attack_defense_capture_point_xkmxz.control_panel.create_zone_a": "快速创建: 区域 A (A1, A2)",
-  "gui.attack_defense_capture_point_xkmxz.control_panel.create_zone_b": "快速创建: 区域 B (B1, B2, 需要 A)",
-  "gui.attack_defense_capture_point_xkmxz.control_panel.close": "关闭",
-  "gui.attack_defense_capture_point_xkmxz.control_panel.created_hint": "据点已创建！使用 /capturepoint list 查看。",
-  "gui.attack_defense_capture_point_xkmxz.control_panel.zone_created_hint": "区域设置完成！使用 /capturepoint zone status 查看。",
-  "gui.attack_defense_capture_point_xkmxz.control_panel.info_hint": "提示：使用命令进行高级管理。输入 /capturepoint 查看帮助。"
+  "gui.attack_defense_capture_point_xkmxz.graph.title": "据点关系图编辑器",
+  "gui.attack_defense_capture_point_xkmxz.graph.zone_deps": "=== 区域依赖关系图 ===",
+  "gui.attack_defense_capture_point_xkmxz.graph.zoom": "缩放",
+  "gui.attack_defense_capture_point_xkmxz.graph.btn_edit_relations": "查看关系",
+  "gui.attack_defense_capture_point_xkmxz.graph.btn_setup_example": "创建示例 (A→B)",
+  "gui.attack_defense_capture_point_xkmxz.graph.btn_show_status": "查看状态",
+  "gui.attack_defense_capture_point_xkmxz.graph.btn_create_point": "创建据点",
+  "gui.attack_defense_capture_point_xkmxz.graph.btn_create_zone": "创建区域",
+  "gui.attack_defense_capture_point_xkmxz.graph.btn_refresh": "刷新",
+  "gui.attack_defense_capture_point_xkmxz.graph.btn_close": "关闭"
 }

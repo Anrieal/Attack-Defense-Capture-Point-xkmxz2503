@@ -114,6 +114,9 @@ public class ModCommands {
                         .then(Commands.argument("name", StringArgumentType.word())
                                 .suggests(ModCommands::suggestPoints)
                                 .executes(ModCommands::removePointFromAllZones)))
+
+                .then(Commands.literal("relationships")
+                        .executes(ModCommands::showRelationships))
         );
     }
 
@@ -137,6 +140,7 @@ public class ModCommands {
         source.sendSuccess(() -> Component.translatable("command.capturepoint.help.setradius"), false);
         source.sendSuccess(() -> Component.translatable("command.capturepoint.help.setcolor"), false);
         source.sendSuccess(() -> Component.translatable("command.capturepoint.help.settoggle"), false);
+        source.sendSuccess(() -> Component.translatable("command.capturepoint.help.relationships"), false);
         return 1;
     }
 
@@ -464,6 +468,46 @@ public class ModCommands {
 
         manager.removePointFromZone(zoneName, name);
         source.sendSuccess(() -> Component.translatable("command.capturepoint.removefromallzones.success", name, zoneName), true);
+        return 1;
+    }
+
+    /**
+     * 查询据点与区域之间的所有关系。
+     */
+    private static int showRelationships(CommandContext<CommandSourceStack> ctx) {
+        var source = ctx.getSource();
+        var manager = CaptureManager.get(source.getLevel());
+
+        source.sendSuccess(() -> Component.translatable("command.capturepoint.relationships.header"), false);
+
+        var points = manager.getPoints();
+        if (points.isEmpty()) {
+            source.sendSuccess(() -> Component.translatable("command.capturepoint.list.no_points"), false);
+        } else {
+            for (var entry : points.values()) {
+                String owner = entry.owner() != null ? entry.owner() : "-";
+                // 查找此据点所属区域
+                String zoneName = manager.findZoneForPoint(entry.name());
+                String zoneInfo = zoneName != null ? zoneName : "-";
+                source.sendSuccess(() -> Component.translatable(
+                        "command.capturepoint.relationships.point_entry",
+                        entry.name(), entry.pos().getX(), entry.pos().getY(), entry.pos().getZ(),
+                        owner, zoneInfo), false);
+            }
+        }
+
+        var zones = manager.getZones();
+        if (!zones.isEmpty()) {
+            source.sendSuccess(() -> Component.translatable("command.capturepoint.relationships.zone_header"), false);
+            for (var entry : zones.values()) {
+                String pointsList = entry.capturePoints().isEmpty() ? "-" : String.join(", ", entry.capturePoints());
+                String dep = entry.requiredZone() != null ? entry.requiredZone() : "-";
+                source.sendSuccess(() -> Component.translatable(
+                        "command.capturepoint.relationships.zone_entry",
+                        entry.name(), pointsList, dep), false);
+            }
+        }
+
         return 1;
     }
 }

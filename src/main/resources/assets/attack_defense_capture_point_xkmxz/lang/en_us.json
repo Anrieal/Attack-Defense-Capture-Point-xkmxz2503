@@ -19,6 +19,7 @@
   "command.capturepoint.help.setradius": "/capturepoint setradius <name> <radius> - Set point radius",
   "command.capturepoint.help.setcolor": "/capturepoint setcolor <name> <color> - Set point display color",
   "command.capturepoint.help.settoggle": "/capturepoint settoggle <name> <true/false> - Toggle range display",
+  "command.capturepoint.help.relationships": "/capturepoint relationships - Show all point/zone relationships",
 
   "command.capturepoint.gui.hint": "Use the Capture Point Manager item or right-click a Capture Point Block.",
 
@@ -48,6 +49,11 @@
   "command.capturepoint.setcolor.success": "Set display color of '%s' to %s",
   "command.capturepoint.settoggle.on": "Range display enabled for '%s'",
   "command.capturepoint.settoggle.off": "Range display disabled for '%s'",
+
+  "command.capturepoint.relationships.header": "=== Point & Zone Relationships ===",
+  "command.capturepoint.relationships.zone_header": "--- Zones ---",
+  "command.capturepoint.relationships.point_entry": "  Point '%s' at [%d, %d, %d] owner=%s zone=%s",
+  "command.capturepoint.relationships.zone_entry": "  Zone '%s' points=[%s] requires=%s",
 
   "command.capturepoint.zone.create.success": "Created zone '%s'",
   "command.capturepoint.zone.create_with_req.success": "Created zone '%s' (requires '%s' captured first)",

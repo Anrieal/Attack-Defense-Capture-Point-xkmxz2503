@@ -19,6 +19,7 @@
   "command.capturepoint.help.setradius": "/capturepoint setradius <名称> <半径> - 设置据点半径",
   "command.capturepoint.help.setcolor": "/capturepoint setcolor <名称> <颜色> - 设置据点显示颜色",
   "command.capturepoint.help.settoggle": "/capturepoint settoggle <名称> <true/false> - 切换范围显示",
+  "command.capturepoint.help.relationships": "/capturepoint relationships - 查看所有据点和区域的关系",
 
   "command.capturepoint.gui.hint": "使用据点管理器物品或右键点击据点方块打开控制面板。",
 
@@ -48,6 +49,11 @@
   "command.capturepoint.setcolor.success": "已将据点 '%s' 的显示颜色设为 %s",
   "command.capturepoint.settoggle.on": "已启用据点 '%s' 的范围显示",
   "command.capturepoint.settoggle.off": "已禁用据点 '%s' 的范围显示",
+
+  "command.capturepoint.relationships.header": "=== 据点与区域关系表 ===",
+  "command.capturepoint.relationships.zone_header": "--- 区域列表 ---",
+  "command.capturepoint.relationships.point_entry": "  据点 '%s' 在 [%d, %d, %d] 所属=%s 区域=%s",
+  "command.capturepoint.relationships.zone_entry": "  区域 '%s' 包含据点=[%s] 依赖=%s",
 
   "command.capturepoint.zone.create.success": "已创建区域 '%s'",
   "command.capturepoint.zone.create_with_req.success": "已创建区域 '%s'（需要先占领 '%s'）",

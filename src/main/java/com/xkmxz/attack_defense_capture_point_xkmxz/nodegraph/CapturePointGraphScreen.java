@@ -195,11 +195,17 @@ public class CapturePointGraphScreen {
 
             // === 解析连线，重建关系 ===
 
-            // 先清除所有区域中的据点关联
-            for (var zoneName : mgr.getZones().keySet()) {
+            // 先清除所有区域中的据点关联和旧依赖
+            for (var zoneName : new ArrayList<>(mgr.getZones().keySet())) {
                 var zone = mgr.getZones().get(zoneName);
+                // 清除据点关联
                 for (var cpName : new ArrayList<>(zone.capturePoints())) {
                     mgr.removePointFromZone(zoneName, cpName);
+                }
+                // 清除旧依赖（保留据点列表，仅重置 requiredZone）
+                if (zone.requiredZone() != null) {
+                    mgr.getZones().put(zoneName,
+                            new CaptureManager.ZoneEntry(zone.name(), new ArrayList<>(), null));
                 }
             }
 

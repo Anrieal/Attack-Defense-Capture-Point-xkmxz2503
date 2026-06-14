@@ -204,8 +204,7 @@ public class CapturePointGraphScreen {
                 }
                 // 清除旧依赖（保留据点列表，仅重置 requiredZone）
                 if (zone.requiredZone() != null) {
-                    mgr.getZones().put(zoneName,
-                            new CaptureManager.ZoneEntry(zone.name(), new ArrayList<>(), null));
+                    mgr.setZoneRequiredZone(zoneName, null);
                 }
             }
 
@@ -265,14 +264,8 @@ public class CapturePointGraphScreen {
 
             // 重建区域依赖关系
             for (var dep : zoneDependencies) {
-                // dep: from=前置区域, to=后置区域（需要前置区域被占领）
-                var zone = mgr.getZones().get(dep.getValue());
-                if (zone != null) {
-                    // 更新 requiredZone
-                    var newList = new ArrayList<>(zone.capturePoints());
-                    mgr.getZones().put(dep.getValue(),
-                            new CaptureManager.ZoneEntry(zone.name(), newList, dep.getKey()));
-                }
+                // dep: key=前置区域(front), value=后置区域(back) → 后置区域依赖前置区域
+                mgr.setZoneRequiredZone(dep.getValue(), dep.getKey());
             }
 
             mgr.setDirty();

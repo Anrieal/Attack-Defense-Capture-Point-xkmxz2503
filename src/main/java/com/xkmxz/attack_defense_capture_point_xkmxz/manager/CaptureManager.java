@@ -214,6 +214,21 @@ public class CaptureManager extends SavedData {
     }
 
     /**
+     * 设置区域的依赖区域（requiredZone），即攻防模式下前置区域。
+     * 此方法直接操作内部 zones 列表，不同于 getZones() 返回的不可修改视图。
+     * @param zoneName 要修改的区域名称
+     * @param requiredZone 依赖的前置区域名称（null 表示清除依赖）
+     */
+    public void setZoneRequiredZone(String zoneName, @Nullable String requiredZone) {
+        var zone = zones.get(zoneName);
+        if (zone != null) {
+            // 保留原有据点列表，仅修改区域依赖
+            zones.put(zoneName, new ZoneEntry(zone.name(), new ArrayList<>(zone.capturePoints()), requiredZone));
+            setDirty();
+        }
+    }
+
+    /**
      * 查找包含指定据点的区域名称。
      * @return 区域名称，如果据点不属于任何区域则返回 null
      */

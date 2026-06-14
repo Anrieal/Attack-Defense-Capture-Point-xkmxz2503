@@ -70,6 +70,7 @@
   "gui.attack_defense_capture_point_xkmxz.graph.btn_create_zone": "创建区域",
   "gui.attack_defense_capture_point_xkmxz.graph.btn_show_status": "查看状态",
   "gui.attack_defense_capture_point_xkmxz.graph.btn_refresh": "刷新",
+  "gui.attack_defense_capture_point_xkmxz.graph.btn_save": "保存",
 
   "node.capture_point.display_name": "据点",
   "node.capture_point.option.owner": "所属",
@@ -155,5 +156,7 @@
   "toast.capture_point_block.unbind_zone": "已将据点 '%s' 从区域中移除",
 
   "command.capturepoint.removefromallzones.success": "已将 '%s' 从区域 '%s' 中移除",
-  "command.capturepoint.removefromallzones.not_in_zone": "'%s' 不在任何区域中"
+  "command.capturepoint.removefromallzones.not_in_zone": "'%s' 不在任何区域中",
+
+  "toast.capture_point_graph.saved": "节点图保存成功"
 }

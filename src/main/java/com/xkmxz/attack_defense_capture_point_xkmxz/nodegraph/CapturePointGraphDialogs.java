@@ -39,12 +39,15 @@ public final class CapturePointGraphDialogs {
                         reopen(level);
                         return;
                     }
-                    var player = Minecraft.getInstance().player;
-                    if (player != null) {
-                        player.connection.sendCommand("capturepoint create " + name);
-                        ToastNotification.push(ToastNotification.Type.SUCCESS,
-                                Component.translatable("toast.capture_point.create.success", name));
+                    // 直接 Java 调用创建据点
+                    var mgr = getManager(level);
+                    if (mgr != null && !mgr.getPoints().containsKey(name)) {
+                        var player = Minecraft.getInstance().player;
+                        var pos = player != null ? player.blockPosition() : net.minecraft.core.BlockPos.ZERO;
+                        mgr.addOrUpdatePoint(name, pos);
                     }
+                    ToastNotification.push(ToastNotification.Type.SUCCESS,
+                            Component.translatable("toast.capture_point.create.success", name));
                     reopen(level);
                 },
                 level
@@ -65,12 +68,13 @@ public final class CapturePointGraphDialogs {
                         reopen(level);
                         return;
                     }
-                    var player = Minecraft.getInstance().player;
-                    if (player != null) {
-                        player.connection.sendCommand("capturepoint zone create " + name);
-                        ToastNotification.push(ToastNotification.Type.SUCCESS,
-                                Component.translatable("toast.capture_zone.create.success", name));
+                    // 直接 Java 调用创建区域
+                    var mgr = getManager(level);
+                    if (mgr != null && !mgr.getZones().containsKey(name)) {
+                        mgr.createZone(name, null);
                     }
+                    ToastNotification.push(ToastNotification.Type.SUCCESS,
+                            Component.translatable("toast.capture_zone.create.success", name));
                     reopen(level);
                 },
                 level
@@ -120,18 +124,19 @@ public final class CapturePointGraphDialogs {
                 .setText(Component.translatable("gui.capture_point_graph.dialog.confirm"));
         confirmBtn.layout(l -> l.flex(1).heightPercent(100));
         confirmBtn.setOnClick(e -> {
-            var player = mc.player;
-            if (player != null) {
+            // 直接 Java 调用删除
+            var mgr = getManager(level);
+            if (mgr != null) {
                 if (isZone) {
-                    player.connection.sendCommand("capturepoint zone remove " + name);
+                    mgr.removeZone(name);
                 } else {
-                    player.connection.sendCommand("capturepoint remove " + name);
+                    mgr.removePoint(name);
                 }
-                ToastNotification.push(ToastNotification.Type.SUCCESS,
-                        Component.translatable(
-                                isZone ? "toast.capture_zone.delete.success" : "toast.capture_point.delete.success",
-                                name));
             }
+            ToastNotification.push(ToastNotification.Type.SUCCESS,
+                    Component.translatable(
+                            isZone ? "toast.capture_zone.delete.success" : "toast.capture_point.delete.success",
+                            name));
             mc.setScreen(null);
             new CapturePointGraphScreen(level).open();
         });
@@ -223,5 +228,21 @@ public final class CapturePointGraphDialogs {
     private static void reopen(Level level) {
         Minecraft.getInstance().setScreen(null);
         new CapturePointGraphScreen(level).open();
+    }
+
+    /**
+     * 获取服务端 CaptureManager（单机可用，服务端回退到命令）。
+     */
+    @org.jetbrains.annotations.Nullable
+    private static com.xkmxz.attack_defense_capture_point_xkmxz.manager.CaptureManager getManager(Level level) {
+        if (level instanceof net.minecraft.server.level.ServerLevel sl) {
+            return com.xkmxz.attack_defense_capture_point_xkmxz.manager.CaptureManager.get(sl);
+        }
+        var mc = Minecraft.getInstance();
+        if (mc.hasSingleplayerServer() && mc.getSingleplayerServer() != null) {
+            return com.xkmxz.attack_defense_capture_point_xkmxz.manager.CaptureManager.get(
+                    mc.getSingleplayerServer().getLevel(level.dimension()));
+        }
+        return null;
     }
 }

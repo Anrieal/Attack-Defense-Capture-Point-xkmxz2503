@@ -70,6 +70,7 @@
   "gui.attack_defense_capture_point_xkmxz.graph.btn_create_zone": "Create Zone",
   "gui.attack_defense_capture_point_xkmxz.graph.btn_show_status": "Show Status",
   "gui.attack_defense_capture_point_xkmxz.graph.btn_refresh": "Refresh",
+  "gui.attack_defense_capture_point_xkmxz.graph.btn_save": "Save",
 
   "node.capture_point.display_name": "Capture Point",
   "node.capture_point.option.owner": "Owner",
@@ -155,5 +156,7 @@
   "toast.capture_point_block.unbind_zone": "Point '%s' removed from its zone",
 
   "command.capturepoint.removefromallzones.success": "Removed '%s' from zone '%s'",
-  "command.capturepoint.removefromallzones.not_in_zone": "'%s' is not in any zone"
+  "command.capturepoint.removefromallzones.not_in_zone": "'%s' is not in any zone",
+
+  "toast.capture_point_graph.saved": "Graph saved successfully"
 }

@@ -8,12 +8,23 @@ import com.lowdragmc.lowdraglib2.gui.ui.UIElement;
 import com.lowdragmc.lowdraglib2.gui.ui.elements.Button;
 import com.lowdragmc.lowdraglib2.gui.ui.elements.Label;
 import com.lowdragmc.lowdraglib2.gui.ui.styletemplate.Sprites;
+import com.lowdragmc.lowdraglib2.nodegraphtookit.model.GraphElementModel;
+import com.lowdragmc.lowdraglib2.nodegraphtookit.model.node.InputOutputPortsNodeModel;
+import com.lowdragmc.lowdraglib2.nodegraphtookit.model.node.NodeModel;
+import com.lowdragmc.lowdraglib2.nodegraphtookit.model.node.PortModel;
+import com.lowdragmc.lowdraglib2.nodegraphtookit.model.wire.WireModel;
+import com.xkmxz.attack_defense_capture_point_xkmxz.manager.CaptureManager;
 import net.minecraft.client.Minecraft;
+import net.minecraft.core.BlockPos;
 import net.minecraft.network.chat.Component;
+import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.level.Level;
+
+import java.util.*;
 
 /**
  * 据点管理节点图屏幕 - 使用 LDLib2 nodegraphtookit 框架提供完整的节点图编辑体验。
+ * 支持保存节点关系到 CaptureManager。
  */
 public class CapturePointGraphScreen {
 
@@ -80,10 +91,16 @@ public class CapturePointGraphScreen {
         title.setText(Component.translatable("gui.attack_defense_capture_point_xkmxz.graph.title"));
         title.layout(l -> l.widthAuto().heightPercent(100));
 
+        // 保存按钮
+        var saveBtn = new Button();
+        saveBtn.setText(Component.translatable("gui.attack_defense_capture_point_xkmxz.graph.btn_save"));
+        saveBtn.layout(l -> l.width(50).heightPercent(100));
+        saveBtn.setOnClick(e -> saveGraph());
+
         // 刷新按钮
         var refreshBtn = new Button();
         refreshBtn.setText(Component.translatable("gui.attack_defense_capture_point_xkmxz.graph.btn_refresh"));
-        refreshBtn.layout(l -> l.width(60).heightPercent(100));
+        refreshBtn.layout(l -> l.width(50).heightPercent(100));
         refreshBtn.setOnClick(e -> {
             mc().setScreen(null);
             new CapturePointGraphScreen(level).open();
@@ -92,31 +109,202 @@ public class CapturePointGraphScreen {
         // 关闭按钮
         var closeBtn = new Button();
         closeBtn.setText(Component.translatable("gui.attack_defense_capture_point_xkmxz.block.close"));
-        closeBtn.layout(l -> l.width(60).heightPercent(100));
+        closeBtn.layout(l -> l.width(50).heightPercent(100));
         closeBtn.setOnClick(e -> mc().setScreen(null));
 
         // 占位弹性空间
         var spacer = new UIElement().layout(l -> l.flex(1));
 
-        tb.addChildren(title, spacer, refreshBtn, closeBtn);
+        tb.addChildren(title, spacer, saveBtn, refreshBtn, closeBtn);
         return tb;
     }
 
-    private void loadDataToGraph() {
-        // 从 CaptureManager 加载据点/区域数据并创建节点及连线
+    // ================================================================
+    //  保存节点图到 CaptureManager
+    // ================================================================
+
+    /**
+     * 将当前节点图中的所有节点和连线保存到 CaptureManager。
+     * 直接通过 Java API 调用，不经过命令系统。
+     */
+    private void saveGraph() {
+        var mgr = getServerCaptureManager();
+        if (mgr == null) {
+            // 非单机/服务端环境，通过命令回退
+            var player = mc().player;
+            if (player != null) {
+                player.connection.sendCommand("capturepoint savegraph");
+            }
+            ToastNotification.push(ToastNotification.Type.INFO,
+                    Component.translatable("toast.capture_point_graph.saved"));
+            return;
+        }
+
         try {
-            var serverLevel = getServerLevel();
-            if (serverLevel == null) return;
+            // 收集当前图中所有节点
+            var graphPointNames = new HashSet<String>();
+            var graphZoneNames = new HashSet<String>();
+            // pointModels 和 zoneModels: name → NodeModel
+            var pointModels = new HashMap<String, NodeModel>();
+            var zoneModels = new HashMap<String, NodeModel>();
 
-            var manager = com.xkmxz.attack_defense_capture_point_xkmxz.manager.CaptureManager.get(serverLevel);
-            var points = manager.getPoints();
-            var zones = manager.getZones();
+            for (var element : graph.graphModel.getGraphElementModels()) {
+                if (element instanceof NodeModel nm) {
+                    String name = nm.getName();
+                    if (name == null || name.isEmpty()) continue;
+                    // 通过检查输出端口来判断类型
+                    if (hasOutputPort(nm, "point_signal")) {
+                        graphPointNames.add(name);
+                        pointModels.put(name, nm);
+                    } else if (hasOutputPort(nm, "zone_out") || hasInputPort(nm, "point_in")) {
+                        graphZoneNames.add(name);
+                        zoneModels.put(name, nm);
+                    }
+                }
+            }
 
+            // 删除已被移除的据点/区域
+            var toRemovePoints = new ArrayList<String>();
+            for (var name : mgr.getPoints().keySet()) {
+                if (!graphPointNames.contains(name)) toRemovePoints.add(name);
+            }
+            for (var name : toRemovePoints) mgr.removePoint(name);
+
+            var toRemoveZones = new ArrayList<String>();
+            for (var name : mgr.getZones().keySet()) {
+                if (!graphZoneNames.contains(name)) toRemoveZones.add(name);
+            }
+            for (var name : toRemoveZones) mgr.removeZone(name);
+
+            // 创建新增的据点（使用玩家位置或原点）
+            var player = mc().player;
+            BlockPos defaultPos = player != null ? player.blockPosition() : BlockPos.ZERO;
+
+            for (var name : graphPointNames) {
+                if (!mgr.getPoints().containsKey(name)) {
+                    mgr.addOrUpdatePoint(name, defaultPos);
+                }
+            }
+
+            // 创建新增的区域
+            for (var name : graphZoneNames) {
+                if (!mgr.getZones().containsKey(name)) {
+                    mgr.createZone(name, null);
+                }
+            }
+
+            // === 解析连线，重建关系 ===
+
+            // 先清除所有区域中的据点关联
+            for (var zoneName : mgr.getZones().keySet()) {
+                var zone = mgr.getZones().get(zoneName);
+                for (var cpName : new ArrayList<>(zone.capturePoints())) {
+                    mgr.removePointFromZone(zoneName, cpName);
+                }
+            }
+
+            // 构建 port UID → node name 的映射
+            var portUidToNodeName = new HashMap<UUID, String>();
+            for (var nm : pointModels.values()) {
+                String nodeName = nm.getName();
+                for (var port : nm.getInputsById().values()) portUidToNodeName.put(port.getUid(), nodeName);
+                for (var port : nm.getOutputsById().values()) portUidToNodeName.put(port.getUid(), nodeName);
+            }
+            for (var nm : zoneModels.values()) {
+                String nodeName = nm.getName();
+                for (var port : nm.getInputsById().values()) portUidToNodeName.put(port.getUid(), nodeName);
+                for (var port : nm.getOutputsById().values()) portUidToNodeName.put(port.getUid(), nodeName);
+            }
+
+            // 解析所有连线
+            var pointZoneConnections = new ArrayList<AbstractMap.SimpleEntry<String, String>>(); // point → zone
+            var zoneDependencies = new ArrayList<AbstractMap.SimpleEntry<String, String>>(); // from → to (zone → zone)
+
+            for (var element : graph.graphModel.getGraphElementModels()) {
+                if (element instanceof WireModel wire) {
+                    UUID fromPortUid = wire.getFromPortUid();
+                    UUID toPortUid = wire.getToPortUid();
+
+                    String fromNode = portUidToNodeName.get(fromPortUid);
+                    String toNode = portUidToNodeName.get(toPortUid);
+                    if (fromNode == null || toNode == null) continue;
+
+                    // 查找端口名称：从 fromPort 对象中获取
+                    PortModel fromPort = wire.getFromPort();
+                    PortModel toPort = wire.getToPort();
+                    if (fromPort == null || toPort == null) continue;
+
+                    String fromPortName = fromPort.getName();
+                    String toPortName = toPort.getName();
+
+                    // point_signal → point_in: 据点属于区域
+                    if ("point_signal".equals(fromPortName) && "point_in".equals(toPortName)) {
+                        if (graphPointNames.contains(fromNode) && graphZoneNames.contains(toNode)) {
+                            pointZoneConnections.add(new AbstractMap.SimpleEntry<>(fromNode, toNode));
+                        }
+                    }
+                    // zone_out → required_zone: 区域前后依赖
+                    if ("zone_out".equals(fromPortName) && "required_zone".equals(toPortName)) {
+                        if (graphZoneNames.contains(fromNode) && graphZoneNames.contains(toNode)) {
+                            zoneDependencies.add(new AbstractMap.SimpleEntry<>(fromNode, toNode));
+                        }
+                    }
+                }
+            }
+
+            // 重建据点→区域关联
+            for (var conn : pointZoneConnections) {
+                mgr.addPointToZone(conn.getValue(), conn.getKey());
+            }
+
+            // 重建区域依赖关系
+            for (var dep : zoneDependencies) {
+                // dep: from=前置区域, to=后置区域（需要前置区域被占领）
+                var zone = mgr.getZones().get(dep.getValue());
+                if (zone != null) {
+                    // 更新 requiredZone
+                    var newList = new ArrayList<>(zone.capturePoints());
+                    mgr.getZones().put(dep.getValue(),
+                            new CaptureManager.ZoneEntry(zone.name(), newList, dep.getKey()));
+                }
+            }
+
+            mgr.setDirty();
+
+            ToastNotification.push(ToastNotification.Type.SUCCESS,
+                    Component.translatable("toast.capture_point_graph.saved"));
+
+        } catch (Exception e) {
+            ToastNotification.push(ToastNotification.Type.ERROR,
+                    Component.literal("Save failed: " + e.getMessage()));
+        }
+    }
+
+    /** 检查节点是否有指定名称的输出端口 */
+    private static boolean hasOutputPort(NodeModel nm, String portName) {
+        return nm.getOutputsById().containsKey(portName);
+    }
+
+    /** 检查节点是否有指定名称的输入端口 */
+    private static boolean hasInputPort(NodeModel nm, String portName) {
+        return nm.getInputsById().containsKey(portName);
+    }
+
+    // ================================================================
+    //  从 CaptureManager 加载数据到节点图
+    // ================================================================
+
+    private void loadDataToGraph() {
+        try {
+            var mgr = getServerCaptureManager();
+            if (mgr == null) return;
+
+            var points = mgr.getPoints();
+            var zones = mgr.getZones();
             if (points.isEmpty() && zones.isEmpty()) return;
 
-            // 存储 node model 名称到模型的映射，用于后续连线
-            var pointModels = new java.util.LinkedHashMap<String, com.lowdragmc.lowdraglib2.nodegraphtookit.model.node.NodeModel>();
-            var zoneModels = new java.util.LinkedHashMap<String, com.lowdragmc.lowdraglib2.nodegraphtookit.model.node.NodeModel>();
+            var pointModels = new LinkedHashMap<String, NodeModel>();
+            var zoneModels = new LinkedHashMap<String, NodeModel>();
 
             float startX = 100;
             float startY = 100;
@@ -132,8 +320,7 @@ public class CapturePointGraphScreen {
                 var nodeModel = graph.graphModel.createNodeModel(node,
                         new org.joml.Vector2f(x, y));
                 nodeModel.setName(entry.name());
-                nodeModel.setTitle(net.minecraft.network.chat.Component.literal(entry.name()));
-                // owner 和 position 选项只读显示，在节点定义时已有默认值
+                nodeModel.setTitle(Component.literal(entry.name()));
                 pointModels.put(entry.name(), nodeModel);
                 idx++;
             }
@@ -146,15 +333,12 @@ public class CapturePointGraphScreen {
                 var nodeModel = graph.graphModel.createNodeModel(node,
                         new org.joml.Vector2f(x, y));
                 nodeModel.setName(entry.name());
-                nodeModel.setTitle(net.minecraft.network.chat.Component.literal(entry.name()));
-                // captured / required_zone / points 选项只读显示，节点定义时已有默认值
+                nodeModel.setTitle(Component.literal(entry.name()));
                 zoneModels.put(entry.name(), nodeModel);
                 idx++;
             }
 
-            // === 建立连线（反映"区域包含据点"和"区域前后关系"） ===
-
-            // 连线 1: 据点(point_signal 输出) → 区域(point_in 输入)
+            // 建立连线
             for (var zoneEntry : zones.values()) {
                 var zoneModel = zoneModels.get(zoneEntry.name());
                 if (zoneModel == null) continue;
@@ -166,19 +350,14 @@ public class CapturePointGraphScreen {
                     if (pointModel == null) continue;
                     var signalPort = pointModel.getOutputsById().get("point_signal");
                     if (signalPort == null) continue;
-
                     try {
                         graph.graphModel.createWire(signalPort, pointInPort);
-                    } catch (Exception ignored) {
-                        // 可能端口已连接，忽略
-                    }
+                    } catch (Exception ignored) {}
                 }
             }
 
-            // 连线 2: 前置区域(zone_out 输出) → 后置区域(required_zone 输入)
             for (var zoneEntry : zones.values()) {
                 if (zoneEntry.requiredZone() == null || zoneEntry.requiredZone().isEmpty()) continue;
-
                 var zoneModel = zoneModels.get(zoneEntry.name());
                 if (zoneModel == null) continue;
                 var reqZoneInput = zoneModel.getInputsById().get("required_zone");
@@ -188,23 +367,33 @@ public class CapturePointGraphScreen {
                 if (requiredZoneModel == null) continue;
                 var zoneOutPort = requiredZoneModel.getOutputsById().get("zone_out");
                 if (zoneOutPort == null) continue;
-
                 try {
                     graph.graphModel.createWire(zoneOutPort, reqZoneInput);
-                } catch (Exception ignored) {
-                }
+                } catch (Exception ignored) {}
             }
 
-        } catch (Exception e) {
-            // 非服务端环境，跳过数据加载
-        }
+        } catch (Exception ignored) {}
     }
 
-    private net.minecraft.server.level.ServerLevel getServerLevel() {
-        if (level instanceof net.minecraft.server.level.ServerLevel sl) return sl;
+    // ================================================================
+    //  工具方法
+    // ================================================================
+
+    private ServerLevel getServerLevel() {
+        if (level instanceof ServerLevel sl) return sl;
         var mc = mc();
         if (mc.hasSingleplayerServer() && mc.getSingleplayerServer() != null) {
             return mc.getSingleplayerServer().getLevel(level.dimension());
+        }
+        return null;
+    }
+
+    /** 获取服务端 CaptureManager（单机/服务端均可用） */
+    private CaptureManager getServerCaptureManager() {
+        if (level instanceof ServerLevel sl) return CaptureManager.get(sl);
+        var mc = mc();
+        if (mc.hasSingleplayerServer() && mc.getSingleplayerServer() != null) {
+            return CaptureManager.get(mc.getSingleplayerServer().getLevel(level.dimension()));
         }
         return null;
     }

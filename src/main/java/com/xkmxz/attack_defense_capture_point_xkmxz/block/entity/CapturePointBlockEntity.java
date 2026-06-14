@@ -115,35 +115,47 @@ public class CapturePointBlockEntity extends BlockEntity {
 
     /**
      * 创建并显示方块功能菜单屏幕。
-     * 使用 LDLib2 ModularUI 框架，包含 5 个功能按钮 + 状态信息。
+     * 自动缩放：宽度取屏幕 40%（最大 260px），高度按内容紧凑计算，居中显示。
      */
     private void openMenuScreen() {
         var mc = Minecraft.getInstance();
-        int w = 320, h = 280;
+        var win = mc.getWindow();
+        int scw = win.getGuiScaledWidth();
+
+        // 自适应宽度：屏幕 40% 但不超过 260px
+        int panelW = Math.min(scw * 40 / 100, 260);
+        // 紧凑尺寸
+        int btnH = 22;
+        int gap = 3;
+        int titleH = 16;
+        int bottomH = 20;
+        int pad = 6;
+        int panelH = pad + titleH + gap + 5 * (btnH + gap) + bottomH + pad;
+
         int bg = 0xFF1A1A2E;
         int btnBg = 0xFF16213E;
-        int btnH = 32;
-        int gap = 6;
 
         var root = new UIElement()
-                .layout(l -> l.width(w).height(h).paddingAll(12).gapAll(gap)
+                .layout(l -> l.width(panelW).height(panelH).paddingAll(pad).gapAll(gap)
                         .flexDirection(dev.vfyjxf.taffy.style.FlexDirection.COLUMN))
                 .style(s -> s.background(Sprites.BORDER)
                         .backgroundTexture(new ColorRectTexture(bg)));
 
-        // ---- 标题行 ----
+        // ---- 标题行（紧凑） ----
         var titleRow = new UIElement()
-                .layout(l -> l.widthPercent(100).height(24)
-                        .flexDirection(dev.vfyjxf.taffy.style.FlexDirection.ROW).gapAll(4));
+                .layout(l -> l.widthPercent(100).height(titleH)
+                        .flexDirection(dev.vfyjxf.taffy.style.FlexDirection.ROW).gapAll(3));
         var titleLabel = new Label().setText(Component.translatable("gui.capture_point_block.menu.title"));
         titleLabel.layout(l -> l.widthAuto().heightPercent(100));
+        titleLabel.textStyle(s -> s.fontSize(10.0f).textColor(0xFFAAAAAA));
         var boundLabel = new Label();
         updateBoundLabel(boundLabel);
         boundLabel.layout(l -> l.widthAuto().heightPercent(100));
+        boundLabel.textStyle(s -> s.fontSize(10.0f));
         titleRow.addChildren(titleLabel, boundLabel);
         root.addChildren(titleRow);
 
-        // ---- 功能按钮 ----
+        // ---- 功能按钮（紧凑） ----
         root.addChildren(createFuncButton(btnBg, btnH,
                 "gui.capture_point_block.func1", this::funcCreatePoint));
         root.addChildren(createFuncButton(btnBg, btnH,
@@ -155,13 +167,10 @@ public class CapturePointBlockEntity extends BlockEntity {
         root.addChildren(createFuncButton(btnBg, btnH,
                 "gui.capture_point_block.func5", () -> funcToggleShowRange(mc)));
 
-        // ---- 伸缩空间 ----
-        root.addChildren(new UIElement().layout(l -> l.flex(1)));
-
-        // ---- 底部按钮行 ----
+        // ---- 底部按钮行（紧凑） ----
         var bottomRow = new UIElement()
-                .layout(l -> l.widthPercent(100).height(28)
-                        .flexDirection(dev.vfyjxf.taffy.style.FlexDirection.ROW).gapAll(6));
+                .layout(l -> l.widthPercent(100).height(bottomH)
+                        .flexDirection(dev.vfyjxf.taffy.style.FlexDirection.ROW).gapAll(3));
         var openGraphBtn = new Button().setText(Component.translatable("gui.capture_point_block.open_graph"));
         openGraphBtn.layout(l -> l.flex(1).heightPercent(100));
         openGraphBtn.setOnClick(e -> {
@@ -169,12 +178,19 @@ public class CapturePointBlockEntity extends BlockEntity {
             new CapturePointGraphScreen(level).open();
         });
         var closeBtn = new Button().setText(Component.translatable("gui.capture_point_block.close"));
-        closeBtn.layout(l -> l.width(60).heightPercent(100));
+        closeBtn.layout(l -> l.width(44).heightPercent(100));
         closeBtn.setOnClick(e -> mc.setScreen(null));
         bottomRow.addChildren(openGraphBtn, closeBtn);
         root.addChildren(bottomRow);
 
-        var ui = ModularUI.of(UI.of(root));
+        // 居中容器
+        var wrap = new UIElement()
+                .layout(l -> l.widthPercent(100).heightPercent(100).paddingAll(0).gapAll(0)
+                        .justifyContent(dev.vfyjxf.taffy.style.AlignContent.CENTER)
+                        .alignItems(dev.vfyjxf.taffy.style.AlignItems.CENTER));
+        wrap.addChildren(root);
+
+        var ui = ModularUI.of(UI.of(wrap));
         mc.setScreen(new ModularUIScreen(ui,
                 Component.translatable("gui.capture_point_block.menu.title")));
     }

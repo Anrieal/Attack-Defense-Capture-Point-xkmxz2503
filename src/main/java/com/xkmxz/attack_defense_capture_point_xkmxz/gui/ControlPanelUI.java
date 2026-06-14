@@ -139,27 +139,25 @@ public class ControlPanelUI {
     //  事件处理（全在 GraphView 层）
     // ================================================================
 
-    private boolean menuHit; // 左键点中了菜单项
-    private boolean nodeHit; // 左键点中了节点
-
     private void onMD(UIEvent ev) {
         float sc = gv.getScale();
         float wx = (ev.x - gv.getPositionX())/sc + gv.getOffsetX();
         float wy = (ev.y - gv.getPositionY())/sc + gv.getOffsetY();
 
-        if (ev.button == 1) { // 右键
+        if (ev.button == 1) { // 右键 — 在屏幕坐标记录菜单位置
             ctxOpen = true;
             ctxMX = ev.x - 40; ctxMY = ev.y - 20;
             return;
         }
         if (ev.button == 0) {
-            // 菜单点击
+            // 菜单打开时：左键点击菜单项则执行，否则关闭菜单
             if (ctxOpen) {
                 int idx = (int)((ev.y - ctxMY - 2) / 17f);
                 if (ev.x >= ctxMX && ev.x <= ctxMX+120 && idx >= 0 && idx <= 4) {
-                    execCtx(idx); ctxOpen = false; return;
+                    execCtx(idx);
                 }
                 ctxOpen = false;
+                return;
             }
             // 节点命中
             NodeData hit = null;
@@ -171,9 +169,8 @@ public class ControlPanelUI {
             if (hit != null) {
                 hit.selected = true; selNode = hit;
                 dragNode = hit; dOX = hit.x; dOY = hit.y; dMX = ev.x; dMY = ev.y;
-                nodeHit = true;
             } else {
-                selNode = null; dragNode = null; nodeHit = false;
+                selNode = null; dragNode = null;
             }
         }
     }
@@ -302,7 +299,7 @@ public class ControlPanelUI {
         @Override
         public void drawBackgroundAdditional(GUIContext ctx) {
             if (nodes.isEmpty()) {
-                String msg = "Right-click for options";
+                String msg = Component.translatable("gui.attack_defense_capture_point_xkmxz.graph.empty_hint").getString();
                 Font f = Minecraft.getInstance().font;
                 DrawerHelper.drawText(ctx.graphics, msg, (getSizeWidth()-f.width(msg))/2f, getSizeHeight()/2f-f.lineHeight/2f, 1f, C_TD);
                 return;
@@ -347,11 +344,21 @@ public class ControlPanelUI {
         }
 
         private void drawCtx(GUIContext ctx) {
-            float mx=ctxMX,my=ctxMY,iw=120f,ih=16f,g=1f,mh=5*(ih+g)+4f;
-            DrawerHelper.drawSolidRect(ctx.graphics,mx,my,iw,mh,0xEE1E1E2E);
-            DrawerHelper.drawBorder(ctx.graphics,mx,my,iw,mh,C_PB,1);
-            String[] ls={"Create Point","Create Zone","List Status","\u21BB Refresh","\u2715 Close"};
-            float iy=my+2;for(var l:ls){DrawerHelper.drawText(ctx.graphics,l,mx+4,iy,0.85f,C_TX);iy+=ih+g;}
+            // 将屏幕坐标转换为世界坐标（GraphCanvas 在 transformed contentRoot 中绘制）
+            float sc = gv.getScale();
+            float wx = (ctxMX - gv.getPositionX())/sc + gv.getOffsetX();
+            float wy = (ctxMY - gv.getPositionY())/sc + gv.getOffsetY();
+            float iw=120f,ih=16f,g=1f,mh=5*(ih+g)+4f;
+            DrawerHelper.drawSolidRect(ctx.graphics,wx,wy,iw,mh,0xEE1E1E2E);
+            DrawerHelper.drawBorder(ctx.graphics,wx,wy,iw,mh,C_PB,1);
+            String[] ls={
+                Component.translatable("gui.attack_defense_capture_point_xkmxz.graph.btn_create_point").getString(),
+                Component.translatable("gui.attack_defense_capture_point_xkmxz.graph.btn_create_zone").getString(),
+                Component.translatable("gui.attack_defense_capture_point_xkmxz.graph.btn_show_status").getString(),
+                "\u21BB "+Component.translatable("gui.attack_defense_capture_point_xkmxz.graph.btn_refresh").getString(),
+                "\u2715 "+Component.translatable("gui.attack_defense_capture_point_xkmxz.block.close").getString()
+            };
+            float iy=wy+2;for(var l:ls){DrawerHelper.drawText(ctx.graphics,l,wx+4,iy,0.85f,C_TX);iy+=ih+g;}
         }
     }
 

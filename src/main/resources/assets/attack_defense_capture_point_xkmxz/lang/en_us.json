@@ -53,9 +53,28 @@
   "gui.attack_defense_capture_point_xkmxz.graph.title": "Capture Point Graph Editor",
   "gui.attack_defense_capture_point_xkmxz.graph.zone_deps": "=== Zone Dependency Graph ===",
   "gui.attack_defense_capture_point_xkmxz.graph.zoom": "Zoom",
-  "gui.attack_defense_capture_point_xkmxz.graph.empty_hint": "Use toolbar buttons to create zones and points.",
+  "gui.attack_defense_capture_point_xkmxz.graph.empty_hint": "Right-click for options",
   "gui.attack_defense_capture_point_xkmxz.graph.btn_create_point": "Create Point",
   "gui.attack_defense_capture_point_xkmxz.graph.btn_create_zone": "Create Zone",
   "gui.attack_defense_capture_point_xkmxz.graph.btn_show_status": "Show Status",
-  "gui.attack_defense_capture_point_xkmxz.graph.btn_refresh": "Refresh"
+  "gui.attack_defense_capture_point_xkmxz.graph.btn_refresh": "Refresh",
+
+  "node.capture_point.display_name": "Capture Point",
+  "node.capture_point.option.owner": "Owner",
+  "node.capture_point.option.position": "Position",
+  "node.capture_point.port.point_signal": "Point",
+
+  "node.capture_zone.display_name": "Capture Zone",
+  "node.capture_zone.option.captured": "Captured",
+  "node.capture_zone.option.required_zone": "Requires Zone",
+  "node.capture_zone.option.points": "Member Points",
+  "node.capture_zone.port.point_in": "Member Points",
+  "node.capture_zone.port.required_zone": "Requires",
+
+  "gui.capture_point_graph.menu.create_point": "Create Point",
+  "gui.capture_point_graph.menu.create_zone": "Create Zone",
+  "gui.capture_point_graph.menu.delete": "Delete",
+  "gui.capture_point_graph.menu.list_status": "Show Status",
+  "gui.capture_point_graph.menu.refresh": "Refresh",
+  "gui.capture_point_graph.menu.close": "Close"
 }

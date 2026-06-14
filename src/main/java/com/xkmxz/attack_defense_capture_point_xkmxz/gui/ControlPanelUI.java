@@ -107,37 +107,22 @@ public class ControlPanelUI {
             // 空状态提示通过 canvas 绘制
         }
 
-        // === 浮动工具栏（底部居中 — 仿 graphif 底部 Toolbar） ===
-        var toolbar = new UIElement()
+        // === 底部工具栏（仅保留刷新/关闭，创建移至右键菜单） ===
+        var tbWrap = new UIElement()
                 .layout(l -> l
                         .positionType(dev.vfyjxf.taffy.style.TaffyPosition.ABSOLUTE)
-                        .leftPercent(50)
-                        .bottom(8)
-                        .widthAuto()
-                        .height(28)
-                        .gapAll(2)
-                        .paddingAll(2))
+                        .left(0).right(0).bottom(8).height(32)
+                        .justifyContent(dev.vfyjxf.taffy.style.AlignContent.CENTER));
+        var tbInner = new UIElement()
+                .layout(l -> l.widthAuto().height(28).gapAll(2).paddingAll(2))
                 .style(s -> s.background(Sprites.BORDER)
                         .backgroundTexture(new ColorRectTexture(COL_PANEL_BG)));
-
-        // 用负的 marginLeft 实现居中（因为 leftPercent(50) 是容器左边缘在 50% 处）
-        // 改用 flex 居中：在外层套一个全宽容器
-        var toolbarWrapper = new UIElement()
-                .layout(l -> l
-                        .positionType(dev.vfyjxf.taffy.style.TaffyPosition.ABSOLUTE)
-                        .left(0).right(0).bottom(8)
-                        .height(32)
-                        .justifyContent(dev.vfyjxf.taffy.style.AlignContent.CENTER));
-
-        toolbar.addChildren(
-                makeBtn("\u2691", () -> runCmd("capturepoint create P" + (int)(Math.random()*1000) + ";")),
-                makeBtn("\u25A0", () -> runCmd("capturepoint zone create Z" + (int)(Math.random()*1000) + ";")),
-                makeBtn("\u2630", () -> runCmd("capturepoint list")),
+        tbInner.addChildren(
                 makeBtn("\u21BB", () -> { mc.setScreen(null); new ControlPanelUI(level).open(); }),
                 makeBtn("\u2715", () -> mc.setScreen(null))
         );
-        toolbarWrapper.addChildren(toolbar);
-        root.addChildren(toolbarWrapper);
+        tbWrap.addChildren(tbInner);
+        root.addChildren(tbWrap);
 
         // === 右侧浮动缩放面板（仿 graphif right-toolbar） ===
         var rightPanel = new UIElement()
@@ -279,6 +264,11 @@ public class ControlPanelUI {
     //  Canvas 渲染层
     // ================================================================
 
+    // ---- 右键菜单状态 ----
+    private record ContextMenu(float x, float y, List<MenuItem> items) {}
+    private record MenuItem(String label, Runnable action) {}
+    private ContextMenu ctxMenu;
+
     private class GraphCanvas extends UIElement {
         GraphCanvas() {
             addEventListener(UIEvents.MOUSE_DOWN, this::onMouseDown);
@@ -288,129 +278,87 @@ public class ControlPanelUI {
 
         @Override
         public void drawBackgroundAdditional(GUIContext ctx) {
-            // 空状态
             if (nodes.isEmpty()) {
-                String msg = "Create points & zones using the toolbar";
+                String msg = "Right-click for options";
                 Font f = Minecraft.getInstance().font;
-                float tx = (getSizeWidth() - f.width(msg)) / 2f;
-                float ty = getSizeHeight() / 2f - f.lineHeight / 2f;
-                DrawerHelper.drawText(ctx.graphics, msg, tx, ty, 1.0f, COL_TEXT_DIM);
+                float tx = (getSizeWidth()-f.width(msg))/2f, ty = getSizeHeight()/2f-f.lineHeight/2f;
+                DrawerHelper.drawText(ctx.graphics, msg, tx, ty, 1f, COL_TEXT_DIM);
                 return;
             }
-            // 边
             for (var e : edges) drawEdge(ctx, e);
-            // 节点
             for (var n : nodes) drawNode(ctx, n);
-            // 选中信息
             if (selNode != null) drawInfo(ctx, selNode);
+            if (ctxMenu != null) drawCtxMenu(ctx);
         }
 
         private void drawNode(GUIContext ctx, NodeData n) {
-            float rx = n.x - n.w/2f, ry = n.y - n.h/2f;
-            int bg, border;
-
-            if (n.kind == NodeKind.POINT) {
-                bg = n.owned ? COL_BG_POINT_OWNED : COL_BG_POINT_FREE;
-                border = n.selected ? COL_SEL : (n.owned ? COL_BORDER_POINT_OWNED : COL_BORDER_POINT_FREE);
-            } else {
-                if (n.owned) { bg = COL_BG_ZONE_CAPTURED; border = n.selected ? COL_SEL : COL_BORDER_ZONE_CAPTURED; }
-                else if (n.ownerOrLocked != null) { bg = COL_BG_ZONE_LOCKED; border = n.selected ? COL_SEL : COL_BORDER_ZONE_LOCKED; }
-                else { bg = COL_BG_ZONE_FREE; border = n.selected ? COL_SEL : COL_BORDER_ZONE_FREE; }
-            }
-
-            DrawerHelper.drawSolidRect(ctx.graphics, rx, ry, n.w, n.h, bg);
-            if (n.selected) DrawerHelper.drawBorder(ctx.graphics, rx-2, ry-2, n.w+4, n.h+4, COL_SEL, 2);
-            DrawerHelper.drawBorder(ctx.graphics, rx, ry, n.w, n.h, border, 1);
-
-            String icon = switch (n.kind) {
-                case POINT -> n.owned ? "\u2691" : "\u25CB";
-                case ZONE -> n.owned ? "\u25A0" : "\u25A1";
-            };
-            Font f = Minecraft.getInstance().font;
-            DrawerHelper.drawText(ctx.graphics, icon + " " + n.name, rx+8, ry+(n.h-f.lineHeight)/2f+1, 1f, COL_TEXT);
-
-            String status = switch (n.kind) {
-                case POINT -> n.owned ? n.ownerOrLocked : "";
-                case ZONE -> n.owned ? "Cap" : (n.ownerOrLocked != null ? "Lock" : "Free");
-            };
-            if (!status.isEmpty()) {
-                float sw = f.width(status);
-                DrawerHelper.drawText(ctx.graphics, status, rx+n.w-sw-6, ry+n.h-f.lineHeight-2, 0.7f, COL_TEXT_DIM);
-            }
+            float rx=n.x-n.w/2f, ry=n.y-n.h/2f;
+            int bg, bd;
+            if (n.kind==NodeKind.POINT) { bg=n.owned?COL_BG_POINT_OWNED:COL_BG_POINT_FREE; bd=n.selected?COL_SEL:(n.owned?COL_BORDER_POINT_OWNED:COL_BORDER_POINT_FREE); }
+            else if (n.owned) { bg=COL_BG_ZONE_CAPTURED; bd=n.selected?COL_SEL:COL_BORDER_ZONE_CAPTURED; }
+            else if (n.ownerOrLocked!=null) { bg=COL_BG_ZONE_LOCKED; bd=n.selected?COL_SEL:COL_BORDER_ZONE_LOCKED; }
+            else { bg=COL_BG_ZONE_FREE; bd=n.selected?COL_SEL:COL_BORDER_ZONE_FREE; }
+            DrawerHelper.drawSolidRect(ctx.graphics,rx,ry,n.w,n.h,bg);
+            if (n.selected) DrawerHelper.drawBorder(ctx.graphics,rx-2,ry-2,n.w+4,n.h+4,COL_SEL,2);
+            DrawerHelper.drawBorder(ctx.graphics,rx,ry,n.w,n.h,bd,1);
+            String ic=n.kind==NodeKind.POINT?(n.owned?"\u2691":"\u25CB"):(n.owned?"\u25A0":"\u25A1");
+            Font f=Minecraft.getInstance().font;
+            DrawerHelper.drawText(ctx.graphics,ic+" "+n.name,rx+8,ry+(n.h-f.lineHeight)/2f+1,1f,COL_TEXT);
+            String st=n.kind==NodeKind.POINT?(n.owned?n.ownerOrLocked:""):(n.owned?"Cap":(n.ownerOrLocked!=null?"Lock":"Free"));
+            if (!st.isEmpty()) { float sw=f.width(st); DrawerHelper.drawText(ctx.graphics,st,rx+n.w-sw-6,ry+n.h-f.lineHeight-2,0.7f,COL_TEXT_DIM); }
         }
 
         private void drawEdge(GUIContext ctx, EdgeData e) {
-            float x1 = e.from.x, y1 = e.from.y + e.from.h/2f;
-            float x2 = e.to.x, y2 = e.to.y - e.to.h/2f;
-            int col = e.kind == EdgeKind.MEMBERSHIP ? COL_EDGE_MEMBER : COL_EDGE_DEP;
-            float w = e.kind == EdgeKind.MEMBERSHIP ? 1.5f : 2f;
-            drawBezier(ctx, x1, y1, x2, y2, col, w);
-        }
-
-        private void drawBezier(GUIContext ctx, float x1, float y1, float x2, float y2, int col, float w) {
-            float my = (y1+y2)/2f;
-            var pts = new ArrayList<Vector2f>();
-            for (int i = 0; i <= 24; i++) {
-                float t = (float)i/24f, t1 = 1-t;
-                pts.add(new Vector2f(
-                    t1*t1*t1*x1 + 3*t1*t1*t*x1 + 3*t1*t*t*x2 + t*t*t*x2,
-                    t1*t1*t1*y1 + 3*t1*t1*t*my + 3*t1*t*t*my + t*t*t*y2
-                ));
-            }
-            DrawerHelper.drawLines(ctx.graphics, pts, col, col, w);
-            // 箭头
-            float dx=x2-x1, dy=y2-y1, len=(float)Math.sqrt(dx*dx+dy*dy);
-            if (len<1f) return;
-            float ux=dx/len, uy=dy/len, as=8f;
-            float px=x2-ux*6f, py=y2-uy*6f, ax=-uy*as*0.4f, ay=ux*as*0.4f;
-            var arr = new ArrayList<Vector2f>();
-            arr.add(new Vector2f(x2,y2)); arr.add(new Vector2f(px+ax,py+ay)); arr.add(new Vector2f(px-ax,py-ay));
-            DrawerHelper.drawLines(ctx.graphics, arr, col, col, 1f);
+            float x1=e.from.x, y1=e.from.y+e.from.h/2f, x2=e.to.x, y2=e.to.y-e.to.h/2f;
+            int c=e.kind==EdgeKind.MEMBERSHIP?COL_EDGE_MEMBER:COL_EDGE_DEP;
+            float w=e.kind==EdgeKind.MEMBERSHIP?1.5f:2f, my=(y1+y2)/2f;
+            var pts=new ArrayList<Vector2f>();
+            for(int i=0;i<=24;i++){float t=i/24f,t1=1-t; pts.add(new Vector2f(t1*t1*t1*x1+3*t1*t1*t*x1+3*t1*t*t*x2+t*t*t*x2,t1*t1*t1*y1+3*t1*t1*t*my+3*t1*t*t*my+t*t*t*y2));}
+            DrawerHelper.drawLines(ctx.graphics,pts,c,c,w);
+            float dx=x2-x1,dy=y2-y1,l=(float)Math.sqrt(dx*dx+dy*dy); if(l<1f)return;
+            float ux=dx/l,uy=dy/l,px=x2-ux*6f,py=y2-uy*6f,ax=-uy*8f*0.4f,ay=ux*8f*0.4f;
+            var arr=new ArrayList<Vector2f>(); arr.add(new Vector2f(x2,y2)); arr.add(new Vector2f(px+ax,py+ay)); arr.add(new Vector2f(px-ax,py-ay));
+            DrawerHelper.drawLines(ctx.graphics,arr,c,c,1f);
         }
 
         private void drawInfo(GUIContext ctx, NodeData n) {
-            String info = switch (n.kind) {
-                case POINT -> n.owned ? "Owner: " + n.ownerOrLocked : "Free point";
-                case ZONE -> n.owned ? "Captured" : (n.ownerOrLocked != null ? "Requires: " + n.ownerOrLocked : "Free zone");
-            };
-            DrawerHelper.drawText(ctx.graphics, info, n.x-n.w/2f, n.y+n.h/2f+4, 0.8f, COL_TEXT_DIM);
+            String s=n.kind==NodeKind.POINT?(n.owned?"Owner: "+n.ownerOrLocked:"Free point"):(n.owned?"Captured":(n.ownerOrLocked!=null?"Requires: "+n.ownerOrLocked:"Free zone"));
+            DrawerHelper.drawText(ctx.graphics,s,n.x-n.w/2f,n.y+n.h/2f+4,0.8f,COL_TEXT_DIM);
         }
 
-        // ---- 交互 ----
+        private void drawCtxMenu(GUIContext ctx) {
+            float mx=ctxMenu.x(),my=ctxMenu.y(),iw=120f,ih=16f,g=1f,mh=ctxMenu.items().size()*(ih+g)+4f;
+            DrawerHelper.drawSolidRect(ctx.graphics,mx,my,iw,mh,0xEE1E1E2E);
+            DrawerHelper.drawBorder(ctx.graphics,mx,my,iw,mh,0xFF444466,1);
+            float iy=my+2; for(var it:ctxMenu.items()){ DrawerHelper.drawText(ctx.graphics,it.label(),mx+4,iy,0.85f,COL_TEXT); iy+=ih+g; }
+        }
+
         private void onMouseDown(UIEvent ev) {
-            if (ev.button != 0) return;
-            float scale = getGVScale();
-            float mx = (ev.x - getPositionX())/scale + graphView.getOffsetX();
-            float my = (ev.y - getPositionY())/scale + graphView.getOffsetY();
-
-            NodeData hit = null;
-            for (int i=nodes.size()-1; i>=0; i--) {
-                var n = nodes.get(i);
-                if (mx>=n.x-n.w/2f && mx<=n.x+n.w/2f && my>=n.y-n.h/2f && my<=n.y+n.h/2f) { hit=n; break; }
+            if (ev.button==1) {
+                ctxMenu=new ContextMenu(ev.x-40,ev.y-20,List.of(
+                    new MenuItem("Create Point",()->{runCmd("capturepoint create P"+(int)(Math.random()*1000)+";");ctxMenu=null;}),
+                    new MenuItem("Create Zone",()->{runCmd("capturepoint zone create Z"+(int)(Math.random()*1000)+";");ctxMenu=null;}),
+                    new MenuItem("List Status",()->{runCmd("capturepoint list");ctxMenu=null;}),
+                    new MenuItem("\u21BB Refresh",()->{ctxMenu=null;Minecraft.getInstance().setScreen(null);new ControlPanelUI(level).open();}),
+                    new MenuItem("\u2715 Close",()->{ctxMenu=null;Minecraft.getInstance().setScreen(null);})
+                )); return;
             }
-            for (var n : nodes) n.selected = false;
-            if (hit != null) {
-                hit.selected = true; selNode = hit; dragNode = hit;
-                dragOX = hit.x; dragOY = hit.y;
-                dragMX = ev.x; dragMY = ev.y;
-            } else {
-                selNode = null; dragNode = null;
+            if (ev.button==0 && ctxMenu!=null) {
+                int idx=(int)((ev.y-ctxMenu.y()-2)/17f);
+                if(ev.x>=ctxMenu.x()&&ev.x<=ctxMenu.x()+120&&idx>=0&&idx<ctxMenu.items().size()){ctxMenu.items().get(idx).action().run();return;}
+                ctxMenu=null;
             }
+            if(ev.button!=0)return;
+            float s=getGVScale(),mx=(ev.x-getPositionX())/s+graphView.getOffsetX(),my=(ev.y-getPositionY())/s+graphView.getOffsetY();
+            NodeData hit=null;
+            for(int i=nodes.size()-1;i>=0;i--){var n=nodes.get(i);if(mx>=n.x-n.w/2f&&mx<=n.x+n.w/2f&&my>=n.y-n.h/2f&&my<=n.y+n.h/2f){hit=n;break;}}
+            for(var n:nodes)n.selected=false;
+            if(hit!=null){hit.selected=true;selNode=hit;dragNode=hit;dragOX=hit.x;dragOY=hit.y;dragMX=ev.x;dragMY=ev.y;}
+            else{selNode=null;dragNode=null;}
         }
-
-        private void onDragUpdate(UIEvent ev) {
-            if (dragNode == null) return;
-            float s = getGVScale();
-            dragNode.x = dragOX + (ev.x-dragMX)/s;
-            dragNode.y = dragOY + (ev.y-dragMY)/s;
-        }
-
-        private void onDragEnd(UIEvent ev) { dragNode = null; }
-
-        private float getGVScale() {
-            var p = getParent(); while(p!=null) { if(p instanceof GraphView gv) return gv.getScale(); p=p.getParent(); }
-            return 1f;
-        }
+        private void onDragUpdate(UIEvent ev){if(dragNode==null)return;float s=getGVScale();dragNode.x=dragOX+(ev.x-dragMX)/s;dragNode.y=dragOY+(ev.y-dragMY)/s;}
+        private void onDragEnd(UIEvent ev){dragNode=null;}
+        private float getGVScale(){var p=getParent();while(p!=null){if(p instanceof GraphView gv)return gv.getScale();p=p.getParent();}return 1f;}
     }
 
     // ================================================================
@@ -420,6 +368,8 @@ public class ControlPanelUI {
     private static class ZoomSlider extends UIElement {
         private final GraphView target;
         private float value = 0.5f;
+        private float startVal;
+        private float startMouseY;
         private static final int TRACK = 0x44333333;
         private static final int FILL = 0xCC666666;
         private static final int THUMB = 0xFFAAAAAA;
@@ -444,12 +394,31 @@ public class ControlPanelUI {
             DrawerHelper.drawSolidRect(ctx.graphics,0,ty,w,th,THUMB);
         }
 
-        private void onDown(UIEvent ev) { if(ev.button==0) { update(ev.y); startDrag(this,null); } }
-        private void onDrag(UIEvent ev) { update(ev.y); }
+        private void onDown(UIEvent ev) {
+            if (ev.button != 0) return;
+            startVal = value;
+            startMouseY = ev.y;
+            // 立即定位到点击位置
+            float h = getSizeHeight(); if (h <= 0) return;
+            value = Mth.clamp(1f - getLocalY(ev.y)/h, 0f, 1f);
+            applyZoom();
+            startDrag(this, null);
+        }
 
-        private void update(float my) {
-            float h = getSizeHeight(); if (h<=0) return;
-            value = Mth.clamp(1f - (my-getPositionY())/h, 0f, 1f);
+        private void onDrag(UIEvent ev) {
+            float h = getSizeHeight(); if (h <= 0) return;
+            float dy = (ev.y - startMouseY) / h;
+            value = Mth.clamp(startVal - dy, 0f, 1f);
+            applyZoom();
+        }
+
+        private float getLocalY(float screenY) {
+            float y = 0; UIElement el = this;
+            while (el != null) { y += el.getPositionY(); el = el.getParent(); }
+            return screenY - y;
+        }
+
+        private void applyZoom() {
             float mn=target.getGraphViewStyle().minScale(), mx=target.getGraphViewStyle().maxScale();
             float ns = Mth.clamp(mn+(mx-mn)*value, mn, mx);
             try {

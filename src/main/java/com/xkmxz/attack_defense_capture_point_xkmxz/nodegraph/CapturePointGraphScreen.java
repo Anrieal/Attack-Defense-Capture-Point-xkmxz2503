@@ -15,6 +15,7 @@ import com.lowdragmc.lowdraglib2.nodegraphtookit.model.node.NodeModel;
 import com.lowdragmc.lowdraglib2.nodegraphtookit.model.node.PortModel;
 import com.lowdragmc.lowdraglib2.nodegraphtookit.model.wire.WireModel;
 import com.xkmxz.attack_defense_capture_point_xkmxz.block.entity.CapturePointBlockEntity;
+import com.xkmxz.attack_defense_capture_point_xkmxz.gui.CapturePointTheme;
 import com.xkmxz.attack_defense_capture_point_xkmxz.manager.CaptureManager;
 import com.xkmxz.attack_defense_capture_point_xkmxz.manager.ICaptureDataAccess;
 import com.mojang.logging.LogUtils;
@@ -34,8 +35,6 @@ import java.util.*;
 public class CapturePointGraphScreen {
 
     private static final Logger LOGGER = LogUtils.getLogger();
-    private static final int PANEL_BG = 0xFF1A1A2E;
-    private static final int EDIT_MODE_BG = 0xFF2E1A1A;
 
     private final Level level;
     private final CapturePointGraphView graphView;
@@ -76,10 +75,9 @@ public class CapturePointGraphScreen {
         int scw = win.getGuiScaledWidth();
         int sch = win.getGuiScaledHeight();
 
-        // 根容器 - 全屏
-        var root = new UIElement()
-                .layout(l -> l.width(scw).height(sch))
-                .style(s -> s.background(Sprites.BORDER).backgroundTexture(new ColorRectTexture(PANEL_BG)));
+        // 根容器 - 全屏，使用 SDF 圆角背景
+        var root = CapturePointTheme.panel(CapturePointTheme.ROOT_COLOR)
+                .layout(l -> l.width(scw).height(sch));
 
         // 创建通知层（偏右上角，在顶栏下方，避免被遮挡）
         var toastContainer = new UIElement()
@@ -111,29 +109,26 @@ public class CapturePointGraphScreen {
     }
 
     private UIElement createTopBar() {
-        var tb = new UIElement()
+        var tb = CapturePointTheme.panel(CapturePointTheme.FIELD_COLOR)
                 .layout(l -> l.widthPercent(100).height(32)
                         .flexDirection(dev.vfyjxf.taffy.style.FlexDirection.ROW)
-                        .gapAll(4).paddingAll(4));
-        tb.style(s -> s.background(Sprites.BORDER)
-                .backgroundTexture(new ColorRectTexture(0xFF16213E)));
+                        .gapAll(6).paddingAll(4));
 
         // 标题
-        var title = new Label();
-        title.setText(Component.translatable("gui.attack_defense_capture_point_xkmxz.graph.title"));
+        var title = CapturePointTheme.titleLabel(
+                Component.translatable("gui.attack_defense_capture_point_xkmxz.graph.title"));
         title.layout(l -> l.widthAuto().heightPercent(100));
 
-        // 编辑模式切换按钮（在保存按钮左侧）
-        var editToggleBtn = new Button();
-        updateEditToggleButton(editToggleBtn);
+        // 编辑模式切换按钮
+        var editToggleBtn = CapturePointTheme.styledButton(
+                Component.translatable("gui.attack_defense_capture_point_xkmxz.graph.edit_mode.off"));
         editToggleBtn.layout(l -> l.width(60).heightPercent(100));
         editToggleBtn.setOnClick(e -> {
             editMode = !editMode;
             updateEditToggleButton(editToggleBtn);
             graphView.showPanelsForEditMode(editMode);
-            tb.style(s -> s.backgroundTexture(new ColorRectTexture(editMode ? EDIT_MODE_BG : 0xFF16213E)));
+            tb.style(s -> s.backgroundTexture(CapturePointTheme.panelBg(editMode ? 0xFF2E1A1A : CapturePointTheme.FIELD_COLOR)));
             if (editMode) {
-                // 进入编辑模式时快照版本号，用于保存时的冲突检测
                 captureSnapshotVersion();
             }
             ToastNotification.push(editMode ? ToastNotification.Type.INFO : ToastNotification.Type.SUCCESS,
@@ -141,14 +136,14 @@ public class CapturePointGraphScreen {
         });
 
         // 保存按钮
-        var saveBtn = new Button();
-        saveBtn.setText(Component.translatable("gui.attack_defense_capture_point_xkmxz.graph.btn_save"));
+        var saveBtn = CapturePointTheme.styledButton(
+                Component.translatable("gui.attack_defense_capture_point_xkmxz.graph.btn_save"));
         saveBtn.layout(l -> l.width(50).heightPercent(100));
         saveBtn.setOnClick(e -> saveGraph());
 
         // 刷新按钮
-        var refreshBtn = new Button();
-        refreshBtn.setText(Component.translatable("gui.attack_defense_capture_point_xkmxz.graph.btn_refresh"));
+        var refreshBtn = CapturePointTheme.styledButton(
+                Component.translatable("gui.attack_defense_capture_point_xkmxz.graph.btn_refresh"));
         refreshBtn.layout(l -> l.width(50).heightPercent(100));
         refreshBtn.setOnClick(e -> {
             mc().setScreen(null);
@@ -156,8 +151,8 @@ public class CapturePointGraphScreen {
         });
 
         // 关闭按钮
-        var closeBtn = new Button();
-        closeBtn.setText(Component.translatable("gui.attack_defense_capture_point_xkmxz.block.close"));
+        var closeBtn = CapturePointTheme.styledButton(
+                Component.translatable("gui.attack_defense_capture_point_xkmxz.block.close"));
         closeBtn.layout(l -> l.width(50).heightPercent(100));
         closeBtn.setOnClick(e -> mc().setScreen(null));
 
@@ -172,10 +167,10 @@ public class CapturePointGraphScreen {
     private void updateEditToggleButton(Button btn) {
         if (editMode) {
             btn.setText(Component.translatable("gui.attack_defense_capture_point_xkmxz.graph.edit_mode.on"));
-            btn.style(s -> s.backgroundTexture(new ColorRectTexture(0xFFAA3333)));
+            btn.style(s -> s.backgroundTexture(CapturePointTheme.buttonBg(0xFFAA3333)));
         } else {
             btn.setText(Component.translatable("gui.attack_defense_capture_point_xkmxz.graph.edit_mode.off"));
-            btn.style(s -> s.backgroundTexture(new ColorRectTexture(0xFF333333)));
+            btn.style(s -> s.backgroundTexture(CapturePointTheme.buttonBg(CapturePointTheme.BUTTON_COLOR)));
         }
     }
 
@@ -615,18 +610,16 @@ public class CapturePointGraphScreen {
         var mc = mc();
         int dw = 340, dh = 130;
 
-        var root = new UIElement()
+        var root = CapturePointTheme.panel()
                 .layout(l -> l.width(dw).height(dh).paddingAll(12).gapAll(8)
-                        .flexDirection(dev.vfyjxf.taffy.style.FlexDirection.COLUMN))
-                .style(s -> s.background(Sprites.BORDER)
-                        .backgroundTexture(new ColorRectTexture(0xFF1A1A2E)));
+                        .flexDirection(dev.vfyjxf.taffy.style.FlexDirection.COLUMN));
 
-        var title = new Label().setText(
+        var title = CapturePointTheme.titleLabel(
                 Component.translatable("gui.capture_point_graph.dialog.conflict.title"));
         title.layout(l -> l.widthPercent(100).heightAuto());
         root.addChildren(title);
 
-        var msg = new Label().setText(
+        var msg = CapturePointTheme.secondaryLabel(
                 Component.translatable("gui.capture_point_graph.dialog.conflict.message"));
         msg.layout(l -> l.widthPercent(100).heightAuto());
         root.addChildren(msg);
@@ -636,13 +629,12 @@ public class CapturePointGraphScreen {
         var btnRow = new UIElement()
                 .layout(l -> l.widthPercent(100).height(30)
                         .flexDirection(dev.vfyjxf.taffy.style.FlexDirection.ROW).gapAll(6));
-        var overwriteBtn = new Button().setText(
+        var overwriteBtn = CapturePointTheme.styledButton(
                 Component.translatable("gui.capture_point_graph.dialog.conflict.overwrite"));
         overwriteBtn.layout(l -> l.flex(1).heightPercent(100));
         overwriteBtn.setOnClick(e -> {
             access.applyGraphSnapshot(newPoints, newZones);
 
-            // 立即同步所有已加载方块实体的渲染缓存
             var sl = getServerLevel();
             if (sl != null) {
                 CapturePointBlockEntity.syncAllBoundBlocks(sl);
@@ -654,7 +646,7 @@ public class CapturePointGraphScreen {
             new CapturePointGraphScreen(level).open();
         });
 
-        var cancelBtn = new Button().setText(
+        var cancelBtn = CapturePointTheme.styledButton(
                 Component.translatable("gui.capture_point_graph.dialog.cancel"));
         cancelBtn.layout(l -> l.flex(1).heightPercent(100));
         cancelBtn.setOnClick(e -> {

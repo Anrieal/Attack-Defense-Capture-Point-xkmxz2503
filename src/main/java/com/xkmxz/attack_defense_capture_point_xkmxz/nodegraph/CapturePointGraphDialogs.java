@@ -10,6 +10,7 @@ import com.lowdragmc.lowdraglib2.gui.ui.elements.Label;
 import com.lowdragmc.lowdraglib2.gui.ui.elements.TextField;
 import com.lowdragmc.lowdraglib2.gui.ui.styletemplate.Sprites;
 import com.xkmxz.attack_defense_capture_point_xkmxz.block.entity.CapturePointBlockEntity;
+import com.xkmxz.attack_defense_capture_point_xkmxz.gui.CapturePointTheme;
 import com.xkmxz.attack_defense_capture_point_xkmxz.manager.CaptureManager;
 import com.xkmxz.attack_defense_capture_point_xkmxz.manager.ICaptureDataAccess;
 import net.minecraft.client.Minecraft;
@@ -25,7 +26,6 @@ public final class CapturePointGraphDialogs {
 
     private static final int DIALOG_W = 320;
     private static final int DIALOG_H = 160;
-    private static final int BG_COLOR = 0xFF1A1A2E;
 
     private CapturePointGraphDialogs() {}
 
@@ -132,7 +132,7 @@ public final class CapturePointGraphDialogs {
                 .layout(l -> l.width(DIALOG_W).height(DIALOG_H)
                         .paddingAll(10).gapAll(8))
                 .style(s -> s.background(Sprites.BORDER)
-                        .backgroundTexture(new ColorRectTexture(BG_COLOR)));
+                        .backgroundTexture(new ColorRectTexture(0xFF1A1A2E)));
 
         String titleLangKey;
         String msgLangKey;
@@ -1012,7 +1012,7 @@ public final class CapturePointGraphDialogs {
                 .layout(l -> l.width(DIALOG_W).height(DIALOG_H)
                         .paddingAll(10).gapAll(8))
                 .style(s -> s.background(Sprites.BORDER)
-                        .backgroundTexture(new ColorRectTexture(BG_COLOR)));
+                        .backgroundTexture(new ColorRectTexture(0xFF1A1A2E)));
 
         var title = new Label().setText(titleText);
         title.layout(l -> l.widthPercent(100).heightAuto());

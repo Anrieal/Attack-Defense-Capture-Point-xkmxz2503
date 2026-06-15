@@ -267,6 +267,10 @@ public class CapturePointGraphScreen {
         var zoneDecisionInputs = new LinkedHashMap<String, List<String>>();
         // zoneDecisionOutputs: decisionName → (portName → [zoneName, ...]) 判断器区域输出端口连接的区域
         var zoneDecisionOutputs = new LinkedHashMap<String, Map<String, List<String>>>();
+        // unlockDecisionInputs: decisionName → [zoneName, ...] 🔓 判断器解锁输入（连接到unlock_target端口的区域）
+        var unlockDecisionInputs = new LinkedHashMap<String, List<String>>();
+        // unlockDecisionOutputs: decisionName → (portName → [zoneName, ...]) 🔓 判断器解锁输出端口连接的区域
+        var unlockDecisionOutputs = new LinkedHashMap<String, Map<String, List<String>>>();
 
         for (var element : graph.graphModel.getGraphElementModels()) {
             if (element instanceof WireModel wire) {
@@ -319,6 +323,19 @@ public class CapturePointGraphScreen {
                 // 7. 🔓 区域→区域解锁: from=unlock_out(O)  to=unlock_in(I) — 独立于区域依赖的解锁接口
                 else if (hasOutputPort(fromNm, "unlock_out") && hasInputPort(toNm, "unlock_in")) {
                     wireBasedUnlockDeps.computeIfAbsent(toName, k -> new ArrayList<>()).add(fromName);
+                }
+                // 8. 🔓 区域→判断器(解锁信号): from=unlock_out(O)  to=unlock_target(I)
+                else if (hasOutputPort(fromNm, "unlock_out") && hasInputPort(toNm, "unlock_target")) {
+                    unlockDecisionInputs.computeIfAbsent(toName, k -> new ArrayList<>()).add(fromName);
+                }
+                // 9. 🔓 判断器(解锁信号)→区域解锁: from=unlock_true_out/unlock_false_out(O)  to=unlock_in(I)
+                else if (hasInputPort(toNm, "unlock_in") && hasOutputPort(fromNm, "unlock_true_out")) {
+                    unlockDecisionOutputs.computeIfAbsent(fromName, k -> new LinkedHashMap<>())
+                            .computeIfAbsent("unlock_true_out", k -> new ArrayList<>()).add(toName);
+                }
+                else if (hasInputPort(toNm, "unlock_in") && hasOutputPort(fromNm, "unlock_false_out")) {
+                    unlockDecisionOutputs.computeIfAbsent(fromName, k -> new LinkedHashMap<>())
+                            .computeIfAbsent("unlock_false_out", k -> new ArrayList<>()).add(toName);
                 }
             }
         }
@@ -486,6 +503,62 @@ public class CapturePointGraphScreen {
             var existing = newZones.get(zoneName);
             if (existing != null && requiredZone != null && !requiredZone.isEmpty()) {
                 newZones.put(zoneName, existing.withRequiredZone(requiredZone));
+            }
+        }
+
+        // ---- Phase 7: 🔓 解锁信号判断器条件路由 ----
+        // 评估判断器的条件并路由解锁信号（unlock_out → unlock_target → decision → unlock_true_out/false_out → unlock_in）
+        var unlockDecisionRoutedDeps = new LinkedHashMap<String, List<String>>();
+
+        for (var decisionEntry : decisionModels.entrySet()) {
+            String decisionName = decisionEntry.getKey();
+            var nm = decisionEntry.getValue();
+
+            String condition = getOptionString(nm, "condition");
+            String targetTeam = getOptionString(nm, "target_team");
+
+            // 获取输入此判断器的区域列表（来自 unlock_out → unlock_target 连线）
+            List<String> inputZones = unlockDecisionInputs.get(decisionName);
+            if (inputZones == null || inputZones.isEmpty()) continue;
+
+            // 获取此判断器的解锁输出映射
+            Map<String, List<String>> outputs = unlockDecisionOutputs.get(decisionName);
+            if (outputs == null || outputs.isEmpty()) continue;
+
+            // 对每个输入区域执行条件判断
+            for (String zoneName : inputZones) {
+                var zoneEntry = newZones.get(zoneName);
+                if (zoneEntry == null) continue;
+
+                // 评估条件（基于区域的状态：captured / owner_team / not_captured）
+                boolean conditionMet = evaluateZoneCondition(condition, targetTeam, zoneEntry);
+
+                // 根据结果选择输出端口
+                String outputPort = conditionMet ? "unlock_true_out" : "unlock_false_out";
+                List<String> targetZones = outputs.get(outputPort);
+                if (targetZones == null || targetZones.isEmpty()) continue;
+
+                // 将区域名称添加到下游区域的 unlockDependencies
+                for (String targetZoneName : targetZones) {
+                    unlockDecisionRoutedDeps.computeIfAbsent(targetZoneName, k -> new ArrayList<>()).add(zoneName);
+                }
+            }
+        }
+
+        // 将判断器路由的解锁依赖合并到区域 entries 的 unlockDependencies 中
+        for (var entry : unlockDecisionRoutedDeps.entrySet()) {
+            String zoneName = entry.getKey();
+            List<String> newUnlockDeps = entry.getValue();
+            var existing = newZones.get(zoneName);
+            if (existing != null) {
+                // 合并现有的直连接线解锁依赖 + 判断器路由的解锁依赖
+                var merged = new ArrayList<>(existing.unlockDependencies());
+                for (String dep : newUnlockDeps) {
+                    if (!merged.contains(dep)) {
+                        merged.add(dep);
+                    }
+                }
+                newZones.put(zoneName, existing.withUnlockDependencies(merged));
             }
         }
 

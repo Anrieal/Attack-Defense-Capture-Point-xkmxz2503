@@ -255,10 +255,11 @@ public class Attack_defense_capture_point_xkmxz {
                         }
                     }
 
-                    // 如果已被此队伍占领，保持满进度
+                    // 如果已被此队伍占领 → 逐渐恢复（不秒满）
                     if (java.util.Objects.equals(entry.ownerTeam(), dominantTeam)) {
                         if (entry.captureProgress() < CaptureManager.CapturePointEntry.MAX_PROGRESS) {
-                            access.setPointCaptureProgress(name, CaptureManager.CapturePointEntry.MAX_PROGRESS);
+                            int recovered = entry.captureProgress() + 2;
+                            access.setPointCaptureProgress(name, Math.min(recovered, CaptureManager.CapturePointEntry.MAX_PROGRESS));
                         }
                         continue;
                     }

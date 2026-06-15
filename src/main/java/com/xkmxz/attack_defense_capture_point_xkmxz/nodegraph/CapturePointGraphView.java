@@ -164,12 +164,23 @@ public class CapturePointGraphView extends GraphView {
                     }
                 });
 
-        // 创建判断器
+        // 创建判断器 — 直接在图形中添加节点模型（判断器不存储在 CaptureManager 中）
         menu.leaf(
                 Component.translatable("gui.capture_point_graph.menu.create_decision").getString(),
                 () -> {
-                    if (level != null) {
-                        CapturePointGraphDialogs.openCreateDecisionDialog(level);
+                    if (level != null && screen != null) {
+                        var node = new CaptureDecisionNode();
+                        // 在右键点击位置创建节点（使用屏幕坐标转换为图坐标）
+                        var nodeModel = screen.getGraph().graphModel.createNodeModel(node,
+                                new org.joml.Vector2f(screenX, screenY));
+                        String name = "decision_" + java.util.UUID.randomUUID().toString().substring(0, 6);
+                        nodeModel.setName(name);
+                        nodeModel.setTitle(Component.translatable("node.capture_decision.display_name"));
+                        // 提示用户
+                        ToastNotification.push(ToastNotification.Type.SUCCESS,
+                                Component.translatable("toast.capture_decision.create.success", name));
+                        ToastNotification.push(ToastNotification.Type.INFO,
+                                Component.translatable("toast.capture_decision.edit_hint"));
                     }
                 });
 

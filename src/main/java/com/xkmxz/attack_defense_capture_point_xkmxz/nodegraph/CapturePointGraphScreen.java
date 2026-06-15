@@ -59,6 +59,11 @@ public class CapturePointGraphScreen {
         return editMode;
     }
 
+    /** 获取图模型实例，供 GraphView 创建节点使用 */
+    public CapturePointGraph getGraph() {
+        return graph;
+    }
+
     /** 进入编辑模式时快照当前版本号 */
     private void captureSnapshotVersion() {
         var mgr = getServerCaptureManager();

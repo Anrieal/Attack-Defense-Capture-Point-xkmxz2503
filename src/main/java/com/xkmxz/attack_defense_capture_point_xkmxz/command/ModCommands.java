@@ -14,6 +14,7 @@ import net.minecraft.commands.Commands;
 import net.minecraft.commands.SharedSuggestionProvider;
 import net.minecraft.core.BlockPos;
 import net.minecraft.network.chat.Component;
+import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 
 import java.util.concurrent.CompletableFuture;
@@ -262,7 +263,8 @@ public class ModCommands {
         var source = ctx.getSource();
         var name = StringArgumentType.getString(ctx, "name");
         var captured = BoolArgumentType.getBool(ctx, "captured");
-        var manager = ICaptureDataAccess.server(source.getLevel());
+        var level = source.getLevel();
+        var manager = ICaptureDataAccess.server(level);
 
         if (!manager.getPoints().containsKey(name)) {
             source.sendFailure(Component.translatable("command.capturepoint.error.not_found", name));
@@ -270,6 +272,8 @@ public class ModCommands {
         }
 
         manager.setPointCaptured(name, captured);
+        // 同步客户端缓存和方块实体
+        com.xkmxz.attack_defense_capture_point_xkmxz.block.entity.CapturePointBlockEntity.syncAllBoundBlocks((ServerLevel) level);
         source.sendSuccess(() -> Component.translatable("command.capturepoint.setcaptured.success", name, captured), true);
         return 1;
     }
@@ -278,7 +282,8 @@ public class ModCommands {
         var source = ctx.getSource();
         var zoneName = StringArgumentType.getString(ctx, "zoneName");
         var captured = BoolArgumentType.getBool(ctx, "captured");
-        var manager = ICaptureDataAccess.server(source.getLevel());
+        var level = source.getLevel();
+        var manager = ICaptureDataAccess.server(level);
 
         if (!manager.getZones().containsKey(zoneName)) {
             source.sendFailure(Component.translatable("command.capturepoint.error.zone_not_found", zoneName));
@@ -286,6 +291,8 @@ public class ModCommands {
         }
 
         manager.setZoneCaptured(zoneName, captured);
+        // 同步客户端缓存和方块实体
+        com.xkmxz.attack_defense_capture_point_xkmxz.block.entity.CapturePointBlockEntity.syncAllBoundBlocks((ServerLevel) level);
         source.sendSuccess(() -> Component.translatable("command.capturepoint.zone.setcaptured.success", zoneName, captured), true);
         return 1;
     }

@@ -291,7 +291,6 @@ public class CapturePointGraphScreen {
                     } catch (Exception ignored) {}
                 }
             }
-            String owner = getOptionString(nm, "owner");
             double radius = getOptionDouble(nm, "radius");
             int color = getOptionInt(nm, "display_color");
             boolean showRange = getOptionBool(nm, "show_range");
@@ -320,6 +319,20 @@ public class CapturePointGraphScreen {
 
             newZones.put(name, new CaptureManager.ZoneEntry(
                     name, cpList, reqZone.isEmpty() ? null : reqZone, false));
+        }
+
+        // 根据所有子据点的占领状态重新计算每个区域的 captured
+        for (var zoneName : List.copyOf(newZones.keySet())) {
+            var zone = newZones.get(zoneName);
+            boolean allCaptured = !zone.capturePoints().isEmpty();
+            for (var cpName : zone.capturePoints()) {
+                var cp = newPoints.get(cpName);
+                if (cp == null || !cp.captured()) {
+                    allCaptured = false;
+                    break;
+                }
+            }
+            newZones.put(zoneName, zone.withCaptured(allCaptured));
         }
 
         return new AbstractMap.SimpleEntry<>(newPoints, newZones);

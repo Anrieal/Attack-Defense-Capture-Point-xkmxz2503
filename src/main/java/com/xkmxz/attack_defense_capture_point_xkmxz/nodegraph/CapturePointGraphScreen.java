@@ -297,9 +297,11 @@ public class CapturePointGraphScreen {
             int color = getOptionInt(nm, "display_color");
             boolean showRange = getOptionBool(nm, "show_range");
             boolean captured = getOptionBool(nm, "captured");
+            String ownerTeam = getOptionString(nm, "owner_team");
+            String ownerTeamOrNull = ownerTeam.isEmpty() ? null : ownerTeam;
             newPoints.put(name, new CaptureManager.CapturePointEntry(
                     name, pos, captured,
-                    null, null, 0, null,
+                    ownerTeamOrNull, null, 0, null,
                     radius, color, showRange));
         }
 
@@ -668,6 +670,7 @@ public class CapturePointGraphScreen {
      */
     private static void syncPointOptions(NodeModel nm, CaptureManager.CapturePointEntry entry, boolean isCaptured, @org.jetbrains.annotations.Nullable String zoneName) {
         setOptionValue(nm, "captured", entry.captured());
+        setOptionValue(nm, "owner_team", entry.ownerTeam() != null ? entry.ownerTeam() : "");
         setOptionValue(nm, "position", entry.pos().getX() + ", " + entry.pos().getY() + ", " + entry.pos().getZ());
         // 编辑模式额外字段
         setOptionValue(nm, "radius", entry.radius());

@@ -36,6 +36,11 @@ public class CapturePointNode extends Node {
                 .withDefaultValue(false)
                 .withDisplayName(Component.translatable("node.capture_point.option.captured"))
                 .build();
+        // owner_team 占领队伍 - 字符串（可编辑，空=无队伍）
+        context.addOption("owner_team", String.class)
+                .withDefaultValue("")
+                .withDisplayName(Component.translatable("node.capture_point.option.owner_team"))
+                .build();
         // position 位置 - 只读坐标信息
         context.addOption("position", String.class)
                 .withDefaultValue("0, 0, 0")

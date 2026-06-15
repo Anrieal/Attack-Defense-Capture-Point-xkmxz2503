@@ -301,5 +301,20 @@
   "action_type.capture_action.add_to_zone": "加入区域",
   "action_type.capture_action.remove_from_zone": "移出区域",
 
-  "toast.capture_node.create.success": "已创建节点 '%s'"
+  "toast.capture_node.create.success": "已创建节点 '%s'",
+
+  "hud.capture_progress.friendly_owned": "\u2713 %s（已占领）",
+  "hud.capture_progress.enemy_owned": "\u2717 %s（敌方占领）",
+  "hud.capture_progress.friendly_neutralizing": "\u27F3 %s（清除中 %d%%）",
+  "hud.capture_progress.enemy_neutralizing": "\u27F3 %s（敌方清除中 %d%%）",
+  "hud.capture_progress.friendly_recovering": "\u21BA %s（恢复中 %d%%）",
+  "hud.capture_progress.enemy_recovering": "\u21BA %s（敌方恢复中 %d%%）",
+  "hud.capture_progress.friendly_capturing": "\u25B6 %s（占领中 %d%%）",
+  "hud.capture_progress.enemy_capturing": "\u25B6 %s（敌方占领中 %d%%）",
+  "hud.capture_progress.idle": "\u25CB %s（空闲）",
+  "hud.capture_progress.capturing_team": "占领队伍：%s",
+  "hud.capture_progress.owner_team": "所属：%s",
+
+  "toast.capture_point_graph.no_server_access": "无法访问服务端数据，请使用 /capturepoint 命令操作",
+  "toast.capture_point_graph.save_failed": "保存失败：%s"
 }

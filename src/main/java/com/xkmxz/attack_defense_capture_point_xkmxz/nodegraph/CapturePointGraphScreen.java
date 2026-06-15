@@ -778,7 +778,7 @@ public class CapturePointGraphScreen {
         var mgr = getCaptureManager();
         if (mgr == null) {
             ToastNotification.push(ToastNotification.Type.ERROR,
-                    Component.literal("无法访问服务端数据，请使用命令 /capturepoint setcaptured 操作"));
+                    Component.translatable("toast.capture_point_graph.no_server_access"));
             return;
         }
 
@@ -849,7 +849,7 @@ public class CapturePointGraphScreen {
         } catch (Exception e) {
             LOGGER.error("Save graph failed: {}", e.getMessage(), e);
             ToastNotification.push(ToastNotification.Type.ERROR,
-                    Component.literal("Save failed: " + e.getMessage()));
+                    Component.translatable("toast.capture_point_graph.save_failed", e.getMessage()));
         }
     }
 
@@ -899,7 +899,10 @@ public class CapturePointGraphScreen {
                                      Map<String, Map<String, String>> nodeOpts,
                                      @Nullable CaptureManager.ViewState viewState) {
         var mc = mc();
-        int dw = 340, dh = 130;
+        int scw = mc.getWindow().getGuiScaledWidth();
+        int sch = mc.getWindow().getGuiScaledHeight();
+        int dw = Math.min(scw * 50 / 100, 340);
+        int dh = Math.min(130, (int)(sch * 0.8));
 
         var root = CapturePointTheme.panel()
                 .layout(l -> l.width(dw).height(dh).paddingAll(12).gapAll(8)

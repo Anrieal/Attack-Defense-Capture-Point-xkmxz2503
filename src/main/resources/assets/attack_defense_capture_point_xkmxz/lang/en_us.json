@@ -243,5 +243,11 @@
   "toast.capture_decision.create.success": "Created decision node '%s'",
   "toast.capture_decision.create.empty": "Decision node name cannot be empty",
   "toast.capture_decision.delete.success": "Deleted decision node '%s'",
-  "toast.capture_decision.edit_hint": "Decision node is configured via the Edit Mode panel"
+  "toast.capture_decision.edit_hint": "Decision node is configured via the Edit Mode panel",
+
+  "condition.capture_decision.captured": "Captured",
+  "condition.capture_decision.not_captured": "Not Captured",
+  "condition.capture_decision.owner_team": "Team Match",
+  "condition.capture_decision.capturing": "Capturing",
+  "condition.capture_decision.not_capturing": "Idle"
 }

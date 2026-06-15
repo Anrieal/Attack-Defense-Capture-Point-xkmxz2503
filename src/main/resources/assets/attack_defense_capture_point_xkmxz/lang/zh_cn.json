@@ -243,5 +243,11 @@
   "toast.capture_decision.create.success": "已创建判断器 '%s'",
   "toast.capture_decision.create.empty": "判断器名称不能为空",
   "toast.capture_decision.delete.success": "已删除判断器 '%s'",
-  "toast.capture_decision.edit_hint": "判断器节点请在编辑模式的选项面板中配置"
+  "toast.capture_decision.edit_hint": "判断器节点请在编辑模式的选项面板中配置",
+
+  "condition.capture_decision.captured": "已占领",
+  "condition.capture_decision.not_captured": "未占领",
+  "condition.capture_decision.owner_team": "队伍匹配",
+  "condition.capture_decision.capturing": "占领中",
+  "condition.capture_decision.not_capturing": "空闲"
 }

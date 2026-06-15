@@ -876,6 +876,9 @@ public class CapturePointGraphScreen {
             }
 
             // 🔓 建立解锁连线（unlock_out → unlock_in），独立于区域依赖
+            // 注意：由于判断器解锁信号路由在保存时已被编译解析为直接的 zone→zone
+            // 依赖（ZoneEntry.unlockDependencies），重新打开时只能恢复直接的
+            // unlock_out→unlock_in 连线。通过判断器的解锁路径需要在图中手动重新连线。
             for (var zoneEntry : zones.values()) {
                 if (zoneEntry.unlockDependencies() == null || zoneEntry.unlockDependencies().isEmpty()) continue;
                 var zoneModel = zoneModels.get(zoneEntry.name());
@@ -944,18 +947,13 @@ public class CapturePointGraphScreen {
                                 nm.setTitle(Component.literal(name));
                             }
                         } else if (hasInputPort(nm, "target")) {
-                            // 判断器节点：显示名称 + 条件类型（中文）
-                            String condition = getOptionString(nm, "condition");
-                            if (condition == null || condition.isEmpty()) condition = "captured";
-                            String cn = switch (condition) {
-                                case "captured" -> "已占领";
-                                case "not_captured" -> "未占领";
-                                case "owner_team" -> "队伍匹配";
-                                case "capturing" -> "占领中";
-                                case "not_capturing" -> "空闲";
-                                default -> condition;
-                            };
-                            nm.setTitle(Component.literal(name + " [? " + cn + "]"));
+                            // 判断器节点：显示名称 + 条件类型（i18n）
+                            String conditionStr = getOptionString(nm, "condition");
+                            if (conditionStr == null || conditionStr.isEmpty()) conditionStr = "captured";
+                            var cond = ConditionMode.fromId(conditionStr);
+                            nm.setTitle(Component.literal(name + " [? ")
+                                    .append(cond.getDisplayName())
+                                    .append(Component.literal("]")));
                         } else if (hasOutputPort(nm, "zone_out") || hasInputPort(nm, "point_in")) {
                             // 区域节点：显示名称 + 占领状态 + 点数
                             var entry = zones.get(name);

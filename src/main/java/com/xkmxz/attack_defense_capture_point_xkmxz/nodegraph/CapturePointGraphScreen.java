@@ -573,8 +573,9 @@ public class CapturePointGraphScreen {
             var newPoints = snapshot.getKey();
             var newZones = snapshot.getValue();
 
-            // 收集所有节点的布局信息（保存画布上每个节点的位置）
+            // 收集所有节点的布局信息 + 判断器节点数据
             var layouts = new LinkedHashMap<String, CaptureManager.NodeLayout>();
+            var decisions = new LinkedHashMap<String, CaptureManager.DecisionNodeData>();
             for (var element : graph.graphModel.getGraphElementModels()) {
                 if (element instanceof NodeModel nm) {
                     String name = nm.getName();
@@ -582,6 +583,20 @@ public class CapturePointGraphScreen {
                     var pos = nm.getPosition();
                     if (pos != null) {
                         layouts.put(name, new CaptureManager.NodeLayout(pos.x(), pos.y()));
+                    }
+                    // 判断器节点额外保存 options
+                    if (nm instanceof INodeWithOptions) {
+                        String nodeClassName = nm.getClass().getName();
+                        // 只捕获 CaptureDecisionNode 类型
+                        if (nodeClassName.contains("CaptureDecisionNode")) {
+                            String condition = readOptionString(nm, "condition");
+                            String targetTeam = readOptionString(nm, "target_team");
+                            int progress = readOptionInt(nm, "progress_threshold");
+                            decisions.put(name, new CaptureManager.DecisionNodeData(
+                                    name, pos != null ? pos.x() : 0, pos != null ? pos.y() : 0,
+                                    condition != null ? condition : "captured",
+                                    targetTeam, progress));
+                        }
                     }
                 }
             }
@@ -591,13 +606,13 @@ public class CapturePointGraphScreen {
                 long currentVersion = mgr.getVersion();
                 if (currentVersion != snapshotVersion) {
                     // 数据已被外部修改（命令/方块），弹出确认对话框
-                    openConflictDialog(mgr, newPoints, newZones, layouts);
+                    openConflictDialog(mgr, newPoints, newZones, layouts, decisions);
                     return;
                 }
             }
 
-            // 无冲突或非编辑模式：直接应用（含布局）
-            mgr.applyGraphSnapshotWithLayout(newPoints, newZones, layouts);
+            // 无冲突或非编辑模式：直接应用（含布局 + 判断器）
+            mgr.applyGraphSnapshotWithLayout(newPoints, newZones, layouts, decisions);
 
             // 立即同步所有已加载方块实体的渲染缓存
             var serverLevel = getServerLevel();
@@ -615,13 +630,49 @@ public class CapturePointGraphScreen {
         }
     }
 
+    /** 读取节点模型的 String 类型选项值 */
+    @Nullable
+    private static String readOptionString(NodeModel nm, String optionId) {
+        try {
+            if (nm instanceof INodeWithOptions opts) {
+                var opt = opts.getNodeOptionById(optionId);
+                if (opt instanceof com.lowdragmc.lowdraglib2.nodegraphtookit.model.node.NodeOption nodeOpt) {
+                    var port = nodeOpt.getPortModel();
+                    if (port instanceof IFieldValueConfigurable cfg) {
+                        var val = cfg.getValue();
+                        return val != null ? val.toString() : null;
+                    }
+                }
+            }
+        } catch (Exception ignored) {}
+        return null;
+    }
+
+    /** 读取节点模型的 int 类型选项值 */
+    private static int readOptionInt(NodeModel nm, String optionId) {
+        try {
+            if (nm instanceof INodeWithOptions opts) {
+                var opt = opts.getNodeOptionById(optionId);
+                if (opt instanceof com.lowdragmc.lowdraglib2.nodegraphtookit.model.node.NodeOption nodeOpt) {
+                    var port = nodeOpt.getPortModel();
+                    if (port instanceof IFieldValueConfigurable cfg) {
+                        var val = cfg.getValue();
+                        if (val instanceof Number n) return n.intValue();
+                    }
+                }
+            }
+        } catch (Exception ignored) {}
+        return 0;
+    }
+
     /**
      * 打开版本冲突对话框，询问用户是否覆盖外部修改的数据。
      */
     private void openConflictDialog(CaptureManager captureManager,
                                      Map<String, CaptureManager.CapturePointEntry> newPoints,
                                      Map<String, CaptureManager.ZoneEntry> newZones,
-                                     Map<String, CaptureManager.NodeLayout> layouts) {
+                                     Map<String, CaptureManager.NodeLayout> layouts,
+                                     Map<String, CaptureManager.DecisionNodeData> decisions) {
         var mc = mc();
         int dw = 340, dh = 130;
 
@@ -648,12 +699,11 @@ public class CapturePointGraphScreen {
                 Component.translatable("gui.capture_point_graph.dialog.conflict.overwrite"));
         overwriteBtn.layout(l -> l.flex(1).heightPercent(100));
         overwriteBtn.setOnClick(e -> {
-            // 通过 CaptureManager 直接应用（接口没有布局方法）
             var overwriteMgr = getCaptureManager();
             if (overwriteMgr != null) {
-                overwriteMgr.applyGraphSnapshotWithLayout(newPoints, newZones, layouts);
+                overwriteMgr.applyGraphSnapshotWithLayout(newPoints, newZones, layouts, decisions);
             } else {
-                captureManager.applyGraphSnapshotWithLayout(newPoints, newZones, layouts);
+                captureManager.applyGraphSnapshotWithLayout(newPoints, newZones, layouts, decisions);
             }
 
             var sl = getServerLevel();
@@ -751,6 +801,22 @@ public class CapturePointGraphScreen {
                 nodeModel.setTitle(Component.literal(entry.name()));
                 zoneModels.put(entry.name(), nodeModel);
                 zoneIdx++;
+            }
+
+            // 创建判断器节点（从保存的数据恢复）
+            var savedDecisions = mgr.getDecisionNodes();
+            if (!savedDecisions.isEmpty()) {
+                for (var entry : savedDecisions.entrySet()) {
+                    var data = entry.getValue();
+                    var node = new CaptureDecisionNode();
+                    var nodeModel = graph.graphModel.createNodeModel(node,
+                            new org.joml.Vector2f(data.x(), data.y()));
+                    nodeModel.setName(data.name());
+                    nodeModel.setTitle(Component.literal(data.name()));
+                    setOptionValue(nodeModel, "condition", ConditionMode.fromId(data.condition()));
+                    setOptionValue(nodeModel, "target_team", data.targetTeam() != null ? data.targetTeam() : "");
+                    setOptionValue(nodeModel, "progress_threshold", data.progressThreshold());
+                }
             }
 
             // 建立连线

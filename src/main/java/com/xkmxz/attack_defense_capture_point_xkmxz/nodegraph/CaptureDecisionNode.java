@@ -46,9 +46,9 @@ public class CaptureDecisionNode extends Node {
     public void onDefineOptions(IOptionDefinitionContext context) {
         super.onDefineOptions(context);
 
-        // condition 判断条件类型
-        context.addOption("condition", String.class)
-                .withDefaultValue("captured")
+        // condition 判断条件类型 — 枚举选择器，只能从预设值中选择
+        context.addOption("condition", ConditionMode.class)
+                .withDefaultValue(ConditionMode.CAPTURED)
                 .withDisplayName(Component.translatable("node.capture_decision.option.condition"))
                 .build();
 

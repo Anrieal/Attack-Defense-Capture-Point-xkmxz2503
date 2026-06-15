@@ -25,6 +25,7 @@ public class CaptureManager extends SavedData {
     private final Map<String, CapturePointEntry> points = new LinkedHashMap<>();
     private final Map<String, ZoneEntry> zones = new LinkedHashMap<>();
     private final Map<String, NodeLayout> nodeLayouts = new LinkedHashMap<>();
+    private final Map<String, DecisionNodeData> decisionNodes = new LinkedHashMap<>();
     private long version = 0; // 数据版本号，每次写入递增，用于 GUI 检测外部修改
     @Nullable
     private String defenderTeam = null; // 默认防守方队伍，不为 null 时所有据点初始归此队伍
@@ -178,6 +179,41 @@ public class CaptureManager extends SavedData {
         }
     }
 
+    // ---- Decision Node Data (判断器节点数据持久化) ----
+
+    public record DecisionNodeData(String name, float x, float y,
+                                    String condition, @Nullable String targetTeam,
+                                    int progressThreshold) {
+        private static final String TAG_NAME = "name";
+        private static final String TAG_X = "x";
+        private static final String TAG_Y = "y";
+        private static final String TAG_CONDITION = "condition";
+        private static final String TAG_TARGET_TEAM = "targetTeam";
+        private static final String TAG_PROGRESS = "progressThreshold";
+
+        public CompoundTag toNbt() {
+            var tag = new CompoundTag();
+            tag.putString(TAG_NAME, name);
+            tag.putFloat(TAG_X, x);
+            tag.putFloat(TAG_Y, y);
+            tag.putString(TAG_CONDITION, condition);
+            if (targetTeam != null && !targetTeam.isEmpty()) tag.putString(TAG_TARGET_TEAM, targetTeam);
+            tag.putInt(TAG_PROGRESS, progressThreshold);
+            return tag;
+        }
+
+        public static DecisionNodeData fromNbt(CompoundTag tag) {
+            return new DecisionNodeData(
+                    tag.getString(TAG_NAME),
+                    tag.getFloat(TAG_X),
+                    tag.getFloat(TAG_Y),
+                    tag.getString(TAG_CONDITION),
+                    tag.contains(TAG_TARGET_TEAM) ? tag.getString(TAG_TARGET_TEAM) : null,
+                    tag.contains(TAG_PROGRESS) ? tag.getInt(TAG_PROGRESS) : 50
+            );
+        }
+    }
+
     // ---- Singleton Access ----
 
     public static CaptureManager get(Level level) {
@@ -230,16 +266,19 @@ public class CaptureManager extends SavedData {
      */
     public void applyGraphSnapshotWithLayout(Map<String, CapturePointEntry> newPoints,
                                               Map<String, ZoneEntry> newZones,
-                                              Map<String, NodeLayout> layouts) {
+                                              Map<String, NodeLayout> layouts,
+                                              Map<String, DecisionNodeData> decisions) {
         points.clear();
         zones.clear();
         points.putAll(newPoints);
         zones.putAll(newZones);
         nodeLayouts.clear();
         nodeLayouts.putAll(layouts);
+        decisionNodes.clear();
+        decisionNodes.putAll(decisions);
         bumpVersion();
-        LOGGER.info("Applied graph snapshot with layout: {} points, {} zones, {} layouts (version {})",
-                points.size(), zones.size(), layouts.size(), version);
+        LOGGER.info("Applied graph snapshot: {} points, {} zones, {} layouts, {} decisions (version {})",
+                points.size(), zones.size(), layouts.size(), decisions.size(), version);
     }
 
     // ---- Node Layout ----
@@ -257,6 +296,11 @@ public class CaptureManager extends SavedData {
     /** 获取所有节点布局的不可修改视图 */
     public Map<String, NodeLayout> getNodeLayouts() {
         return Collections.unmodifiableMap(nodeLayouts);
+    }
+
+    /** 获取所有判断器节点数据的不可修改视图 */
+    public Map<String, DecisionNodeData> getDecisionNodes() {
+        return Collections.unmodifiableMap(decisionNodes);
     }
 
     public void addOrUpdatePoint(String name, BlockPos pos) {
@@ -541,6 +585,17 @@ public class CaptureManager extends SavedData {
             tag.put("nodeLayouts", layoutsList);
         }
 
+        // 保存判断器节点数据
+        if (!decisionNodes.isEmpty()) {
+            var decList = new ListTag();
+            for (var entry : decisionNodes.entrySet()) {
+                var decTag = entry.getValue().toNbt();
+                decTag.putString("name", entry.getKey());
+                decList.add(decTag);
+            }
+            tag.put("decisionNodes", decList);
+        }
+
         return tag;
     }
 
@@ -548,6 +603,7 @@ public class CaptureManager extends SavedData {
         points.clear();
         zones.clear();
         nodeLayouts.clear();
+        decisionNodes.clear();
         defenderTeam = null;
 
         var pointsList = tag.getList("points", Tag.TAG_COMPOUND);
@@ -577,6 +633,19 @@ public class CaptureManager extends SavedData {
             }
         }
 
-        LOGGER.info("Loaded {} capture points, {} zones, {} layouts (version {}), defender={}", points.size(), zones.size(), nodeLayouts.size(), version, defenderTeam);
+        // 加载判断器节点数据
+        if (tag.contains("decisionNodes", Tag.TAG_LIST)) {
+            var decList = tag.getList("decisionNodes", Tag.TAG_COMPOUND);
+            for (int i = 0; i < decList.size(); i++) {
+                var decTag = decList.getCompound(i);
+                var name = decTag.getString("name");
+                if (!name.isEmpty()) {
+                    decisionNodes.put(name, DecisionNodeData.fromNbt(decTag));
+                }
+            }
+        }
+
+        LOGGER.info("Loaded {} points, {} zones, {} layouts, {} decisions (version {}), defender={}",
+                points.size(), zones.size(), nodeLayouts.size(), decisionNodes.size(), version, defenderTeam);
     }
 }

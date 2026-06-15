@@ -206,7 +206,9 @@ public class CapturePointGraphScreen {
     }
 
     private static boolean getOptionBool(NodeModel nm, String id) {
-        return "true".equalsIgnoreCase(getOptionString(nm, id));
+        String val = getOptionString(nm, id);
+        if (val == null || val.isEmpty()) return false;
+        return "true".equalsIgnoreCase(val) || "1".equals(val) || "yes".equalsIgnoreCase(val);
     }
 
     /**
@@ -300,10 +302,15 @@ public class CapturePointGraphScreen {
                     radius, color, showRange));
         }
 
-        // 构建区域数据（据点列表优先从连线解析，回退到 edit_points 选项）
+        // 构建区域数据 + 双向同步
+        //   规则③：区域已占领 → 所有子据点强制标记为已占领
+        //   规则②：据点状态变更 → 重新计算区域占领状态
         for (var entry : zoneModels.entrySet()) {
             String name = entry.getKey();
             var nm = entry.getValue();
+
+            // 读取区域节点的 captured 值（用户在编辑模式中可能切换过）
+            boolean zoneCaptured = getOptionBool(nm, "captured");
 
             // 依赖区域：优先从连线解析，回退到选项值
             String reqZone = wireBasedRequiredZone.get(name);
@@ -311,17 +318,27 @@ public class CapturePointGraphScreen {
                 reqZone = getOptionString(nm, "required_zone");
             }
 
-            // 据点列表：只从连线（wire）解析——删除连线即删除归属关系，不依赖 edit_points
+            // 据点列表：只从连线（wire）解析
             List<String> cpList = wireBasedZonePoints.get(name);
             if (cpList == null) {
                 cpList = new ArrayList<>();
             }
 
+            // 规则③：区域已占领 → 强制同步到所有子据点
+            if (zoneCaptured) {
+                for (var cpName : cpList) {
+                    var existing = newPoints.get(cpName);
+                    if (existing != null) {
+                        newPoints.put(cpName, existing.withCaptured(true));
+                    }
+                }
+            }
+
             newZones.put(name, new CaptureManager.ZoneEntry(
-                    name, cpList, reqZone.isEmpty() ? null : reqZone, false));
+                    name, cpList, reqZone.isEmpty() ? null : reqZone, zoneCaptured));
         }
 
-        // 根据所有子据点的占领状态重新计算每个区域的 captured
+        // 规则②：根据所有子据点的占领状态重新计算区域 captured
         for (var zoneName : List.copyOf(newZones.keySet())) {
             var zone = newZones.get(zoneName);
             boolean allCaptured = !zone.capturePoints().isEmpty();
@@ -345,12 +362,8 @@ public class CapturePointGraphScreen {
     private void saveGraph() {
         var mgr = getServerCaptureManager();
         if (mgr == null) {
-            var player = mc().player;
-            if (player != null) {
-                player.connection.sendCommand("capturepoint savegraph");
-            }
-            ToastNotification.push(ToastNotification.Type.INFO,
-                    Component.translatable("toast.capture_point_graph.saved"));
+            ToastNotification.push(ToastNotification.Type.ERROR,
+                    Component.literal("无法访问服务端数据，请使用命令 /capturepoint setcaptured 操作"));
             return;
         }
 

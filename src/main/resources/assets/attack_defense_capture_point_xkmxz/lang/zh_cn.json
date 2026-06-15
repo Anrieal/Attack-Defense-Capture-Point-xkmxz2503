@@ -238,7 +238,10 @@
   "node.capture_condition.port.true_out": "真",
   "node.capture_condition.port.false_out": "假",
   "node.capture_condition.option.condition_type": "条件类型",
+  "node.capture_condition.option.property": "属性",
+  "node.capture_condition.option.operator": "运算符",
   "node.capture_condition.option.compare_value": "比较值",
+  "node.capture_condition.port.bool_in": "布尔输入",
 
   "node.logic_gate.display_name": "逻辑门",
   "node.logic_gate.port.in_a": "输入A",
@@ -288,6 +291,21 @@
   "condition.capture_condition.zone_not_captured": "区域未占领",
   "condition.capture_condition.zone_owner_team": "区域队伍匹配",
   "condition.capture_condition.zone_accessible": "区域可访问",
+
+  "property.capture_condition.captured": "占领状态",
+  "property.capture_condition.owner_team": "占领队伍",
+  "property.capture_condition.capturing_team": "占领中队伍",
+  "property.capture_condition.progress": "占领进度",
+  "property.capture_condition.zone_captured": "区域占领状态",
+  "property.capture_condition.zone_owner_team": "区域占领队伍",
+  "property.capture_condition.zone_accessible": "区域可访问",
+
+  "operator.capture_condition.equals": "==",
+  "operator.capture_condition.not_equals": "!=",
+  "operator.capture_condition.greater_or_equal": ">=",
+  "operator.capture_condition.greater": ">",
+  "operator.capture_condition.less_or_equal": "<=",
+  "operator.capture_condition.less": "<",
 
   "gate_type.logic_gate.and": "与",
   "gate_type.logic_gate.or": "或",

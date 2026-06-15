@@ -5,6 +5,7 @@ import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.level.Level;
 import org.jetbrains.annotations.Nullable;
 
+import java.util.List;
 import java.util.Map;
 
 /**
@@ -122,6 +123,12 @@ public interface ICaptureDataAccess {
 
     /** 设置或清除区域的依赖区域 */
     void setZoneRequiredZone(String zoneName, @Nullable String requiredZone);
+
+    /**
+     * 设置区域的解锁依赖列表（unlock_out → unlock_in 链路）。
+     * 解锁依赖控制区域的运行时可访问性，独立于 zone_out → required_zone 的依赖声明。
+     */
+    void setZoneUnlockDependencies(String zoneName, List<String> unlockDeps);
 
     /**
      * 设置区域占领状态，并同步到区域内所有据点（双向同步规则③）。

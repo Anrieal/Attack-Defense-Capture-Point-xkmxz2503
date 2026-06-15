@@ -861,8 +861,11 @@ public final class CapturePointGraphDialogs {
                         if (!manager.getZones().containsKey(newName)) {
                             manager.createZone(newName, null);
                         }
-                        // 设置依赖
+                        // 设置依赖（同步到解锁依赖，确保对话框中配置的依赖关系生效）
                         manager.setZoneRequiredZone(newName, reqZone.isEmpty() ? null : reqZone);
+                        if (!reqZone.isEmpty()) {
+                            manager.setZoneUnlockDependencies(newName, java.util.List.of(reqZone));
+                        }
                         // 添加据点
                         if (!pointsStr.isEmpty()) {
                             for (var pn : pointsStr.split(",")) {
@@ -875,8 +878,13 @@ public final class CapturePointGraphDialogs {
                         // 删除旧区域
                         manager.removeZone(nodeName);
                     } else {
-                        // 更新依赖
+                        // 更新依赖（同步到解锁依赖）
                         manager.setZoneRequiredZone(nodeName, reqZone.isEmpty() ? null : reqZone);
+                        if (!reqZone.isEmpty()) {
+                            manager.setZoneUnlockDependencies(nodeName, java.util.List.of(reqZone));
+                        } else {
+                            manager.setZoneUnlockDependencies(nodeName, java.util.Collections.emptyList());
+                        }
                         // 先清空再添加据点
                         for (var cpName : new java.util.ArrayList<>(entry.capturePoints())) {
                             manager.removePointFromZone(nodeName, cpName);

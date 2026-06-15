@@ -4,6 +4,7 @@ import net.minecraft.core.BlockPos;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.Collections;
+import java.util.List;
 import java.util.Map;
 
 /**
@@ -118,6 +119,11 @@ public class ServerCaptureDataAccess implements ICaptureDataAccess {
     @Override
     public void setZoneRequiredZone(String zoneName, @Nullable String requiredZone) {
         manager.setZoneRequiredZone(zoneName, requiredZone);
+    }
+
+    @Override
+    public void setZoneUnlockDependencies(String zoneName, List<String> unlockDeps) {
+        manager.setZoneUnlockDependencies(zoneName, unlockDeps);
     }
 
     @Override

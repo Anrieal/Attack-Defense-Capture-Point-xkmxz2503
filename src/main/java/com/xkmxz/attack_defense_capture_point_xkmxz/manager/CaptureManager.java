@@ -518,6 +518,20 @@ public class CaptureManager extends SavedData {
     }
 
     /**
+     * 设置区域的解锁依赖列表（unlock_out → unlock_in 链路）。
+     * 解锁依赖控制区域的运行时可访问性，独立于 zone_out → required_zone 的依赖声明。
+     * @param zoneName 区域名称
+     * @param unlockDeps 解锁依赖的区域名称列表
+     */
+    public void setZoneUnlockDependencies(String zoneName, List<String> unlockDeps) {
+        var zone = zones.get(zoneName);
+        if (zone != null) {
+            zones.put(zoneName, new ZoneEntry(zone.name(), new ArrayList<>(zone.capturePoints()), zone.requiredZone(), zone.captured(), zone.ownerTeam(), unlockDeps));
+            bumpVersion();
+        }
+    }
+
+    /**
      * 查找包含指定据点的区域名称。
      * @return 区域名称，如果据点不属于任何区域则返回 null
      */

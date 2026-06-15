@@ -419,11 +419,8 @@ public class CapturePointGraphScreen {
 
             boolean zoneCaptured = getOptionBool(nm, "captured");
 
-            // 依赖区域：优先从连线解析，回退到选项值
+            // 依赖区域：仅从连线（zone_out → required_zone）解析
             String reqZone = wireBasedRequiredZone.get(name);
-            if (reqZone == null || reqZone.isEmpty()) {
-                reqZone = getOptionString(nm, "required_zone");
-            }
 
             // 合并据点：直连 + 判断器路由
             var cpList = new ArrayList<String>();
@@ -454,7 +451,7 @@ public class CapturePointGraphScreen {
             var unlockDepList = unlockDeps != null ? unlockDeps : new ArrayList<String>();
 
             newZones.put(name, new CaptureManager.ZoneEntry(
-                    name, cpList, reqZone.isEmpty() ? null : reqZone, zoneCaptured, null, unlockDepList));
+                    name, cpList, reqZone, zoneCaptured, null, unlockDepList));
         }
 
         // ---- Phase 6: 区域判断器条件路由 ----

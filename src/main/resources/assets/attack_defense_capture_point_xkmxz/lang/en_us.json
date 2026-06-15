@@ -6,8 +6,7 @@
   "command.capturepoint.help.header": "=== /capturepoint Commands ===",
   "command.capturepoint.help.create": "/capturepoint create <name> - Create a point at your position",
   "command.capturepoint.help.remove": "/capturepoint remove <name> - Remove a point",
-  "command.capturepoint.help.setowner": "/capturepoint setowner <name> <owner> - Set point owner",
-  "command.capturepoint.help.clearowner": "/capturepoint clearowner <name> - Clear point owner",
+  "command.capturepoint.help.setcaptured": "/capturepoint setcaptured <name> <true/false> - Set point captured status",
   "command.capturepoint.help.list": "/capturepoint list - List all points and zones",
   "command.capturepoint.help.zone_create": "/capturepoint zone create <name> [requires] - Create a zone",
   "command.capturepoint.help.zone_remove": "/capturepoint zone remove <name> - Remove a zone",
@@ -20,6 +19,7 @@
   "command.capturepoint.help.setcolor": "/capturepoint setcolor <name> <color> - Set point display color",
   "command.capturepoint.help.settoggle": "/capturepoint settoggle <name> <true/false> - Toggle range display",
   "command.capturepoint.help.zone_setrequired": "/capturepoint zone setrequired <zone> [requiredZone|clear] - Set/clear zone dependency",
+  "command.capturepoint.help.zone_setcaptured": "/capturepoint zone setcaptured <zone> <true/false> - Set zone captured status (syncs to all child points)",
   "command.capturepoint.help.relationships": "/capturepoint relationships - Show all point/zone relationships",
   "command.capturepoint.help.savegraph": "/capturepoint savegraph - Save graph data from editor (singleplayer: use GUI Save button)",
 
@@ -28,8 +28,7 @@
 
   "command.capturepoint.create.success": "Created capture point '%s' at [%d, %d, %d]",
   "command.capturepoint.remove.success": "Removed capture point '%s'",
-  "command.capturepoint.setowner.success": "Set owner of '%s' to '%s'",
-  "command.capturepoint.clearowner.success": "Cleared owner of '%s'",
+  "command.capturepoint.setcaptured.success": "Set captured status of '%s' to %s",
   "command.capturepoint.error.player_only": "This command must be executed by a player",
   "command.capturepoint.error.not_found": "Capture point '%s' not found",
   "command.capturepoint.error.zone_exists": "Zone '%s' already exists",
@@ -66,6 +65,7 @@
   "command.capturepoint.zone.status_entry": "Zone %s [%s] [%s]",
   "command.capturepoint.zone.setrequired.success": "Set required zone of '%s' to '%s'",
   "command.capturepoint.zone.setrequired.clear": "Cleared required zone of '%s'",
+  "command.capturepoint.zone.setcaptured.success": "Set captured status of zone '%s' to %s",
 
   "command.capturepoint.savegraph.hint": "Use GUI Save button in singleplayer or use custom packet in dedicated server.",
 
@@ -125,7 +125,7 @@
 
   "gui.capture_point_graph.dialog.advanced_config.title": "Advanced Configuration - %s",
   "gui.capture_point_graph.dialog.advanced_config.info": "Position: [%d, %d, %d]",
-  "gui.capture_point_graph.dialog.advanced_config.owner": "Owner:",
+  "gui.capture_point_graph.dialog.advanced_config.captured": "Captured:",
   "gui.capture_point_graph.dialog.advanced_config.radius": "Radius (1-100):",
   "gui.capture_point_graph.dialog.advanced_config.show_range": "Show Range:",
   "gui.capture_point_graph.dialog.advanced_config.color": "Display Color:",
@@ -170,7 +170,7 @@
   "toast.capture_point_block.point_not_found": "Point '%s' not found in world data",
   "toast.capture_point_block.status_name": "Name: %s",
   "toast.capture_point_block.status_pos": "Position: [%d, %d, %d]",
-  "toast.capture_point_block.status_owner": "Owner: %s",
+  "toast.capture_point_block.status_captured": "Captured: %s",
   "toast.capture_point_block.status_radius": "Radius: %d",
   "toast.capture_point_block.status_range": "Range Display: %s",
   "toast.capture_point_block.radius_invalid": "Radius must be between 1 and 100",

@@ -41,15 +41,11 @@ public class ModCommands {
                         .then(Commands.argument("name", StringArgumentType.word())
                                 .suggests(ModCommands::suggestPoints)
                                 .executes(ModCommands::removePoint)))
-                .then(Commands.literal("setowner")
+                .then(Commands.literal("setcaptured")
                         .then(Commands.argument("name", StringArgumentType.word())
                                 .suggests(ModCommands::suggestPoints)
-                                .then(Commands.argument("owner", StringArgumentType.string())
-                                        .executes(ModCommands::setOwner))))
-                .then(Commands.literal("clearowner")
-                        .then(Commands.argument("name", StringArgumentType.word())
-                                .suggests(ModCommands::suggestPoints)
-                                .executes(ctx -> setOwner(ctx, null))))
+                                .then(Commands.argument("captured", BoolArgumentType.bool())
+                                        .executes(ModCommands::setPointCaptured))))
                 .then(Commands.literal("list")
                         .executes(ModCommands::listAll))
 
@@ -87,7 +83,12 @@ public class ModCommands {
                                         .then(Commands.literal("clear")
                                                 .executes(ctx -> setZoneRequired(ctx, null)))))
                         .then(Commands.literal("status")
-                                .executes(ModCommands::zoneStatus)))
+                                .executes(ModCommands::zoneStatus))
+                        .then(Commands.literal("setcaptured")
+                                .then(Commands.argument("zoneName", StringArgumentType.word())
+                                        .suggests(ModCommands::suggestZones)
+                                        .then(Commands.argument("captured", BoolArgumentType.bool())
+                                                .executes(ModCommands::setZoneCaptured)))))
 
 
                 // ---- 方块相关命令 ----
@@ -141,14 +142,14 @@ public class ModCommands {
         source.sendSuccess(() -> Component.translatable("command.capturepoint.help.header"), false);
         source.sendSuccess(() -> Component.translatable("command.capturepoint.help.create"), false);
         source.sendSuccess(() -> Component.translatable("command.capturepoint.help.remove"), false);
-        source.sendSuccess(() -> Component.translatable("command.capturepoint.help.setowner"), false);
-        source.sendSuccess(() -> Component.translatable("command.capturepoint.help.clearowner"), false);
+        source.sendSuccess(() -> Component.translatable("command.capturepoint.help.setcaptured"), false);
         source.sendSuccess(() -> Component.translatable("command.capturepoint.help.list"), false);
         source.sendSuccess(() -> Component.translatable("command.capturepoint.help.zone_create"), false);
         source.sendSuccess(() -> Component.translatable("command.capturepoint.help.zone_remove"), false);
         source.sendSuccess(() -> Component.translatable("command.capturepoint.help.zone_addpoint"), false);
         source.sendSuccess(() -> Component.translatable("command.capturepoint.help.zone_removepoint"), false);
         source.sendSuccess(() -> Component.translatable("command.capturepoint.help.zone_status"), false);
+        source.sendSuccess(() -> Component.translatable("command.capturepoint.help.zone_setcaptured"), false);
         source.sendSuccess(() -> Component.translatable("command.capturepoint.help.gui"), false);
         source.sendSuccess(() -> Component.translatable("command.capturepoint.help.createat"), false);
         source.sendSuccess(() -> Component.translatable("command.capturepoint.help.setradius"), false);
@@ -257,13 +258,10 @@ public class ModCommands {
         }
     }
 
-    private static int setOwner(CommandContext<CommandSourceStack> ctx) {
-        return setOwner(ctx, StringArgumentType.getString(ctx, "owner"));
-    }
-
-    private static int setOwner(CommandContext<CommandSourceStack> ctx, @org.jetbrains.annotations.Nullable String owner) {
+    private static int setPointCaptured(CommandContext<CommandSourceStack> ctx) {
         var source = ctx.getSource();
         var name = StringArgumentType.getString(ctx, "name");
+        var captured = BoolArgumentType.getBool(ctx, "captured");
         var manager = ICaptureDataAccess.server(source.getLevel());
 
         if (!manager.getPoints().containsKey(name)) {
@@ -271,12 +269,24 @@ public class ModCommands {
             return 0;
         }
 
-        manager.setPointOwner(name, owner);
-        if (owner != null) {
-            source.sendSuccess(() -> Component.translatable("command.capturepoint.setowner.success", name, owner), true);
-        } else {
-            source.sendSuccess(() -> Component.translatable("command.capturepoint.clearowner.success", name), true);
+        manager.setPointCaptured(name, captured);
+        source.sendSuccess(() -> Component.translatable("command.capturepoint.setcaptured.success", name, captured), true);
+        return 1;
+    }
+
+    private static int setZoneCaptured(CommandContext<CommandSourceStack> ctx) {
+        var source = ctx.getSource();
+        var zoneName = StringArgumentType.getString(ctx, "zoneName");
+        var captured = BoolArgumentType.getBool(ctx, "captured");
+        var manager = ICaptureDataAccess.server(source.getLevel());
+
+        if (!manager.getZones().containsKey(zoneName)) {
+            source.sendFailure(Component.translatable("command.capturepoint.error.zone_not_found", zoneName));
+            return 0;
         }
+
+        manager.setZoneCaptured(zoneName, captured);
+        source.sendSuccess(() -> Component.translatable("command.capturepoint.zone.setcaptured.success", zoneName, captured), true);
         return 1;
     }
 
@@ -291,9 +301,8 @@ public class ModCommands {
             source.sendSuccess(() -> Component.translatable("command.capturepoint.list.no_points"), false);
         } else {
             for (var entry : points.values()) {
-                var owner = entry.owner() != null ? entry.owner() : "none";
                 source.sendSuccess(() -> Component.translatable("command.capturepoint.list.point_entry",
-                        entry.name(), entry.pos().getX(), entry.pos().getY(), entry.pos().getZ(), owner), false);
+                        entry.name(), entry.pos().getX(), entry.pos().getY(), entry.pos().getZ(), entry.captured()), false);
             }
         }
 
@@ -558,14 +567,14 @@ public class ModCommands {
             source.sendSuccess(() -> Component.translatable("command.capturepoint.list.no_points"), false);
         } else {
             for (var entry : points.values()) {
-                String owner = entry.owner() != null ? entry.owner() : "-";
+                String capturedStr = entry.captured() ? "✓" : "✗";
                 // 查找此据点所属区域
                 String zoneName = manager.findZoneForPoint(entry.name());
                 String zoneInfo = zoneName != null ? zoneName : "-";
                 source.sendSuccess(() -> Component.translatable(
                         "command.capturepoint.relationships.point_entry",
                         entry.name(), entry.pos().getX(), entry.pos().getY(), entry.pos().getZ(),
-                        owner, zoneInfo), false);
+                        capturedStr, zoneInfo), false);
             }
         }
 

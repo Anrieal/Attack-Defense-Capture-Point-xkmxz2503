@@ -167,12 +167,12 @@ public final class CapturePointGraphDialogs {
 
     /** 用于在子对话框间传递编辑状态 */
     private record AdvancedConfigState(String pointName, Level level,
-                                        String owner, double radius,
+                                        boolean captured, double radius,
                                         boolean showRange, int displayColor) {}
 
     /**
      * 打开据点高级配置对话框，可编辑据点的所有配置项：
-     * owner、radius、displayColor、showRange。
+     * captured、radius、displayColor、showRange。
      * 颜色选择器通过"更改颜色"按钮进入独立的子对话框，避免主界面臃肿。
      */
     public static void openAdvancedConfigDialog(Level level, String pointName) {
@@ -190,7 +190,7 @@ public final class CapturePointGraphDialogs {
         }
         buildAdvancedConfigUI(new AdvancedConfigState(
                 pointName, level,
-                entry.owner() != null ? entry.owner() : "",
+                entry.captured(),
                 entry.radius(), entry.showRange(), entry.displayColor()));
     }
 
@@ -228,6 +228,7 @@ public final class CapturePointGraphDialogs {
                      + hColorRow + gapBig + hBottom + pad; // = 241
 
         // 可变状态（颜色通过子对话框修改）
+        boolean[] currentCaptured = { state.captured() };
         boolean[] currentShowRange = { state.showRange() };
         int[] currentDisplayColor = { state.displayColor() };
 
@@ -267,25 +268,21 @@ public final class CapturePointGraphDialogs {
         // 间距
         root.addChildren(new UIElement().layout(l -> l.widthPercent(100).height(gapBig)));
 
-        // ---- Owner 标签 ----
-        var ownerLabel = new Label().setText(
-                Component.translatable("gui.capture_point_graph.dialog.advanced_config.owner"));
-        ownerLabel.layout(l -> l.widthPercent(100).height(hLabel));
-        ownerLabel.textStyle(s -> s.fontSize(10.0f).textColor(0xFFCCCCCC));
-        root.addChildren(ownerLabel);
+        // ---- Captured 状态 ----
+        var capturedLabel = new Label().setText(
+                Component.translatable("gui.capture_point_graph.dialog.advanced_config.captured"));
+        capturedLabel.layout(l -> l.widthPercent(100).height(hLabel));
+        capturedLabel.textStyle(s -> s.fontSize(10.0f).textColor(0xFFCCCCCC));
+        root.addChildren(capturedLabel);
 
-        // 间距
-        root.addChildren(new UIElement().layout(l -> l.widthPercent(100).height(gapSmall)));
-
-        // ---- Owner 输入框 ----
-        var ownerField = new TextField();
-        ownerField.layout(l -> l.widthPercent(100).height(hField));
-        ownerField.textFieldStyle(s -> {
-            s.textColor(0xFFFFFFFF);
-            s.fontSize(12.0f);
+        var capturedBtn = new Button();
+        capturedBtn.layout(l -> l.widthPercent(100).height(hField));
+        capturedBtn.setOnClick(e -> {
+            currentCaptured[0] = !currentCaptured[0];
+            updateToggleButtonText(capturedBtn, currentCaptured[0]);
         });
-        ownerField.setValue(state.owner(), false);
-        root.addChildren(ownerField);
+        updateToggleButtonText(capturedBtn, currentCaptured[0]);
+        root.addChildren(capturedBtn);
 
         // 间距
         root.addChildren(new UIElement().layout(l -> l.widthPercent(100).height(gapBig)));
@@ -353,7 +350,7 @@ public final class CapturePointGraphDialogs {
         changeColorBtn.setOnClick(e -> {
             var currentState = new AdvancedConfigState(
                     state.pointName(), state.level(),
-                    ownerField.getText(), Double.parseDouble(radiusField.getText()),
+                    currentCaptured[0], Double.parseDouble(radiusField.getText()),
                     currentShowRange[0], currentDisplayColor[0]);
             openColorPickerSubDialog(currentState);
         });
@@ -373,7 +370,6 @@ public final class CapturePointGraphDialogs {
                 .setText(Component.translatable("gui.capture_point_graph.dialog.advanced_config.save"));
         saveBtn.layout(l -> l.flex(1).heightPercent(100));
         saveBtn.setOnClick(e -> {
-            String newOwner = ownerField.getText().trim();
             double newRadius;
             try {
                 newRadius = Double.parseDouble(radiusField.getText().trim());
@@ -389,7 +385,7 @@ public final class CapturePointGraphDialogs {
             }
             var manager = getManager(state.level());
             if (manager != null) {
-                manager.setPointOwner(state.pointName(), newOwner.isEmpty() ? null : newOwner);
+                manager.setPointCaptured(state.pointName(), currentCaptured[0]);
                 manager.setPointRadius(state.pointName(), newRadius);
                 manager.setPointShowRange(state.pointName(), currentShowRange[0]);
                 manager.setPointDisplayColor(state.pointName(), currentDisplayColor[0]);
@@ -491,7 +487,7 @@ public final class CapturePointGraphDialogs {
             swatch.addEventListener(com.lowdragmc.lowdraglib2.gui.ui.event.UIEvents.MOUSE_DOWN, ev -> {
                 var newState = new AdvancedConfigState(
                         state.pointName(), state.level(),
-                        state.owner(), state.radius(),
+                        state.captured(), state.radius(),
                         state.showRange(), selectedColor);
                 buildAdvancedConfigUI(newState);
             });
@@ -610,13 +606,17 @@ public final class CapturePointGraphDialogs {
             nameField.setValue(nodeName, false);
             root.addChildren(nameField);
 
-            // --- Owner ---
-            root.addChildren(fieldLabel("node.capture_point.option.owner", hLabel));
-            var ownerField = new TextField();
-            ownerField.layout(l -> l.widthPercent(100).height(hField));
-            ownerField.textFieldStyle(s -> { s.textColor(0xFFFFFFFF); s.fontSize(12.0f); });
-            ownerField.setValue(entry.owner() != null ? entry.owner() : "", false);
-            root.addChildren(ownerField);
+            // --- Captured ---
+            root.addChildren(fieldLabel("gui.capture_point_graph.dialog.advanced_config.captured", hLabel));
+            boolean[] currentCaptured = { entry.captured() };
+            var capturedBtn = new Button();
+            capturedBtn.layout(l -> l.widthPercent(100).height(hField));
+            capturedBtn.setOnClick(e -> {
+                currentCaptured[0] = !currentCaptured[0];
+                updateToggleText(capturedBtn, currentCaptured[0]);
+            });
+            updateToggleText(capturedBtn, currentCaptured[0]);
+            root.addChildren(capturedBtn);
 
             // --- Radius ---
             root.addChildren(fieldLabel("gui.capture_point_graph.dialog.advanced_config.radius", hLabel));
@@ -672,7 +672,6 @@ public final class CapturePointGraphDialogs {
             saveBtn.layout(l -> l.flex(1).heightPercent(100));
             saveBtn.setOnClick(e -> {
                 String newName = nameField.getText().trim();
-                String newOwner = ownerField.getText().trim();
                 double newRadius;
                 try {
                     newRadius = Double.parseDouble(radiusField.getText().trim());
@@ -697,14 +696,14 @@ public final class CapturePointGraphDialogs {
                             manager.addOrUpdatePoint(newName, entry.pos());
                         }
                         // 复制其他属性
-                        manager.setPointOwner(newName, newOwner.isEmpty() ? null : newOwner);
+                        manager.setPointCaptured(newName, currentCaptured[0]);
                         manager.setPointRadius(newName, newRadius);
                         manager.setPointShowRange(newName, currentShowRange[0]);
                         manager.setPointDisplayColor(newName, currentColor[0]);
                         // 删除旧名称据点
                         manager.removePoint(nodeName);
                     } else {
-                        manager.setPointOwner(nodeName, newOwner.isEmpty() ? null : newOwner);
+                        manager.setPointCaptured(nodeName, currentCaptured[0]);
                         manager.setPointRadius(nodeName, newRadius);
                         manager.setPointShowRange(nodeName, currentShowRange[0]);
                         manager.setPointDisplayColor(nodeName, currentColor[0]);

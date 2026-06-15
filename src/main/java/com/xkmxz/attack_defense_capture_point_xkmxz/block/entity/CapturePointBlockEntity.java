@@ -436,6 +436,7 @@ public class CapturePointBlockEntity extends BlockEntity {
         var cached = getPointDataFromCache();
         double displayRadius = cached != null ? cached.radius() : radius;
         boolean displayShowRange = cached != null ? cached.showRange() : showRange;
+        boolean displayCaptured = cached != null ? cached.captured() : false;
 
         ToastNotification.push(ToastNotification.Type.INFO,
                 Component.translatable("toast.capture_point_block.status_name", boundPointName));
@@ -445,21 +446,15 @@ public class CapturePointBlockEntity extends BlockEntity {
         ToastNotification.push(ToastNotification.Type.INFO,
                 Component.translatable("toast.capture_point_block.status_radius", (int) displayRadius));
         ToastNotification.push(ToastNotification.Type.INFO,
+                Component.translatable("toast.capture_point_block.status_captured",
+                        displayCaptured
+                                ? Component.translatable("gui.capture_point_graph.dialog.advanced_config.toggle.on").getString()
+                                : Component.translatable("gui.capture_point_graph.dialog.advanced_config.toggle.off").getString()));
+        ToastNotification.push(ToastNotification.Type.INFO,
                 Component.translatable("toast.capture_point_block.status_range",
                         displayShowRange
                                 ? Component.translatable("gui.capture_point_graph.dialog.advanced_config.toggle.on").getString()
                                 : Component.translatable("gui.capture_point_graph.dialog.advanced_config.toggle.off").getString()));
-
-        // 尝试获取服务端补充数据（仅单机可用）
-        var mgr = getServerDataAccess();
-        if (mgr != null) {
-            var entry = mgr.getPoint(boundPointName);
-            if (entry != null) {
-                String owner = entry.owner() != null ? entry.owner() : "none";
-                ToastNotification.push(ToastNotification.Type.INFO,
-                        Component.translatable("toast.capture_point_block.status_owner", owner));
-            }
-        }
 
         reopenMenu();
     }

@@ -28,7 +28,7 @@ public class CaptureManager extends SavedData {
 
     // ---- Data Records ----
 
-    public record CapturePointEntry(String name, BlockPos pos, @Nullable String owner,
+    public record CapturePointEntry(String name, BlockPos pos, boolean captured,
                                     double radius, int displayColor, boolean showRange) {
         public static final double DEFAULT_RADIUS = 5.0;
         public static final int DEFAULT_COLOR = 0xFFFF4444;
@@ -39,7 +39,7 @@ public class CaptureManager extends SavedData {
             tag.putInt("x", pos.getX());
             tag.putInt("y", pos.getY());
             tag.putInt("z", pos.getZ());
-            if (owner != null) tag.putString("owner", owner);
+            tag.putBoolean("captured", captured);
             tag.putDouble("radius", radius);
             tag.putInt("displayColor", displayColor);
             tag.putBoolean("showRange", showRange);
@@ -49,31 +49,31 @@ public class CaptureManager extends SavedData {
         public static CapturePointEntry fromNbt(CompoundTag tag) {
             var name = tag.getString("name");
             var pos = new BlockPos(tag.getInt("x"), tag.getInt("y"), tag.getInt("z"));
-            var owner = tag.contains("owner") ? tag.getString("owner") : null;
+            var captured = tag.contains("captured") && tag.getBoolean("captured");
             var radius = tag.contains("radius") ? tag.getDouble("radius") : DEFAULT_RADIUS;
             var displayColor = tag.contains("displayColor") ? tag.getInt("displayColor") : DEFAULT_COLOR;
             var showRange = tag.contains("showRange") && tag.getBoolean("showRange");
-            return new CapturePointEntry(name, pos, owner, radius, displayColor, showRange);
+            return new CapturePointEntry(name, pos, captured, radius, displayColor, showRange);
         }
 
-        public CapturePointEntry withOwner(@Nullable String newOwner) {
-            return new CapturePointEntry(name, pos, newOwner, radius, displayColor, showRange);
+        public CapturePointEntry withCaptured(boolean newCaptured) {
+            return new CapturePointEntry(name, pos, newCaptured, radius, displayColor, showRange);
         }
 
         public CapturePointEntry withRadius(double newRadius) {
-            return new CapturePointEntry(name, pos, owner, newRadius, displayColor, showRange);
+            return new CapturePointEntry(name, pos, captured, newRadius, displayColor, showRange);
         }
 
         public CapturePointEntry withDisplayColor(int newColor) {
-            return new CapturePointEntry(name, pos, owner, radius, newColor, showRange);
+            return new CapturePointEntry(name, pos, captured, radius, newColor, showRange);
         }
 
         public CapturePointEntry withShowRange(boolean newShowRange) {
-            return new CapturePointEntry(name, pos, owner, radius, displayColor, newShowRange);
+            return new CapturePointEntry(name, pos, captured, radius, displayColor, newShowRange);
         }
     }
 
-    public record ZoneEntry(String name, List<String> capturePoints, @Nullable String requiredZone) {
+    public record ZoneEntry(String name, List<String> capturePoints, @Nullable String requiredZone, boolean captured) {
 
         public CompoundTag toNbt() {
             var tag = new CompoundTag();
@@ -84,6 +84,7 @@ public class CaptureManager extends SavedData {
             }
             tag.put("capturePoints", list);
             if (requiredZone != null) tag.putString("requiredZone", requiredZone);
+            tag.putBoolean("captured", captured);
             return tag;
         }
 
@@ -95,15 +96,20 @@ public class CaptureManager extends SavedData {
                 points.add(list.getString(i));
             }
             var requiredZone = tag.contains("requiredZone") ? tag.getString("requiredZone") : null;
-            return new ZoneEntry(name, points, requiredZone);
+            var captured = tag.contains("captured") && tag.getBoolean("captured");
+            return new ZoneEntry(name, points, requiredZone, captured);
         }
 
-        public boolean isCaptured(Map<String, CapturePointEntry> pointsMap) {
-            for (var cpName : capturePoints) {
-                var cp = pointsMap.get(cpName);
-                if (cp == null || cp.owner() == null) return false;
-            }
-            return true;
+        public ZoneEntry withCaptured(boolean newCaptured) {
+            return new ZoneEntry(name, capturePoints, requiredZone, newCaptured);
+        }
+
+        public ZoneEntry withCapturePoints(List<String> newCapturePoints) {
+            return new ZoneEntry(name, newCapturePoints, requiredZone, captured);
+        }
+
+        public ZoneEntry withRequiredZone(@Nullable String newRequiredZone) {
+            return new ZoneEntry(name, capturePoints, newRequiredZone, captured);
         }
     }
 
@@ -164,13 +170,13 @@ public class CaptureManager extends SavedData {
     }
 
     public void addOrUpdatePoint(String name, BlockPos pos) {
-        points.put(name, new CapturePointEntry(name, pos, null,
+        points.put(name, new CapturePointEntry(name, pos, false,
                 CapturePointEntry.DEFAULT_RADIUS, CapturePointEntry.DEFAULT_COLOR, false));
         bumpVersion();
     }
 
     public void addOrUpdatePointWithRadius(String name, BlockPos pos, double radius) {
-        points.put(name, new CapturePointEntry(name, pos, null,
+        points.put(name, new CapturePointEntry(name, pos, false,
                 radius, CapturePointEntry.DEFAULT_COLOR, false));
         bumpVersion();
     }
@@ -180,12 +186,48 @@ public class CaptureManager extends SavedData {
         bumpVersion();
     }
 
-    public void setPointOwner(String name, @Nullable String owner) {
+    public void setPointCaptured(String name, boolean captured) {
         var existing = points.get(name);
         if (existing != null) {
-            points.put(name, existing.withOwner(owner));
+            points.put(name, existing.withCaptured(captured));
+            // 重新计算所属区域的占领状态（双向同步规则②）
+            recalcZoneCapturedForPoint(name);
             bumpVersion();
         }
+    }
+
+    /** 设置区域的占领状态，并同步到区域内所有据点（双向同步规则③） */
+    public void setZoneCaptured(String zoneName, boolean captured) {
+        var zone = zones.get(zoneName);
+        if (zone != null) {
+            // 先更新区域本身
+            zones.put(zoneName, zone.withCaptured(captured));
+            // 同步到所有子据点
+            for (var cpName : zone.capturePoints()) {
+                var cp = points.get(cpName);
+                if (cp != null) {
+                    points.put(cpName, cp.withCaptured(captured));
+                }
+            }
+            bumpVersion();
+        }
+    }
+
+    /** 据点状态变更后，重新计算其所属区域的占领状态 */
+    private void recalcZoneCapturedForPoint(String pointName) {
+        String zoneName = findZoneForPoint(pointName);
+        if (zoneName == null) return;
+        var zone = zones.get(zoneName);
+        if (zone == null) return;
+        boolean allCaptured = true;
+        for (var cpName : zone.capturePoints()) {
+            var cp = points.get(cpName);
+            if (cp == null || !cp.captured()) {
+                allCaptured = false;
+                break;
+            }
+        }
+        zones.put(zoneName, zone.withCaptured(allCaptured));
     }
 
     public void setPointRadius(String name, double radius) {
@@ -213,7 +255,7 @@ public class CaptureManager extends SavedData {
     }
 
     public void createZone(String name, @Nullable String requiredZone) {
-        zones.put(name, new ZoneEntry(name, new ArrayList<>(), requiredZone));
+        zones.put(name, new ZoneEntry(name, new ArrayList<>(), requiredZone, false));
         bumpVersion();
     }
 
@@ -228,7 +270,7 @@ public class CaptureManager extends SavedData {
             var newList = new ArrayList<>(zone.capturePoints());
             if (!newList.contains(pointName)) {
                 newList.add(pointName);
-                zones.put(zoneName, new ZoneEntry(zone.name(), newList, zone.requiredZone()));
+                zones.put(zoneName, new ZoneEntry(zone.name(), newList, zone.requiredZone(), zone.captured()));
                 bumpVersion();
             }
         }
@@ -239,7 +281,7 @@ public class CaptureManager extends SavedData {
         if (zone != null) {
             var newList = new ArrayList<>(zone.capturePoints());
             newList.remove(pointName);
-            zones.put(zoneName, new ZoneEntry(zone.name(), newList, zone.requiredZone()));
+            zones.put(zoneName, new ZoneEntry(zone.name(), newList, zone.requiredZone(), zone.captured()));
             bumpVersion();
         }
     }
@@ -253,8 +295,8 @@ public class CaptureManager extends SavedData {
     public void setZoneRequiredZone(String zoneName, @Nullable String requiredZone) {
         var zone = zones.get(zoneName);
         if (zone != null) {
-            // 保留原有据点列表，仅修改区域依赖
-            zones.put(zoneName, new ZoneEntry(zone.name(), new ArrayList<>(zone.capturePoints()), requiredZone));
+            // 保留原有据点列表和占领状态，仅修改区域依赖
+            zones.put(zoneName, new ZoneEntry(zone.name(), new ArrayList<>(zone.capturePoints()), requiredZone, zone.captured()));
             bumpVersion();
         }
     }
@@ -276,11 +318,7 @@ public class CaptureManager extends SavedData {
     public boolean isZoneCaptured(String zoneName) {
         var zone = zones.get(zoneName);
         if (zone == null) return false;
-        for (var cpName : zone.capturePoints()) {
-            var cp = points.get(cpName);
-            if (cp == null || cp.owner() == null) return false;
-        }
-        return true;
+        return zone.captured();
     }
 
     public boolean canAccessZone(String zoneName) {

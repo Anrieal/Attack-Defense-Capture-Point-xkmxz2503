@@ -6,8 +6,7 @@
   "command.capturepoint.help.header": "=== /capturepoint 命令帮助 ===",
   "command.capturepoint.help.create": "/capturepoint create <名称> - 在当前位置创建据点",
   "command.capturepoint.help.remove": "/capturepoint remove <名称> - 移除据点",
-  "command.capturepoint.help.setowner": "/capturepoint setowner <名称> <所属> - 设置据点所属",
-  "command.capturepoint.help.clearowner": "/capturepoint clearowner <名称> - 清除据点所属",
+  "command.capturepoint.help.setcaptured": "/capturepoint setcaptured <名称> <true/false> - 设置据点占领状态",
   "command.capturepoint.help.list": "/capturepoint list - 列出所有据点和区域",
   "command.capturepoint.help.zone_create": "/capturepoint zone create <名称> [依赖区域] - 创建区域",
   "command.capturepoint.help.zone_remove": "/capturepoint zone remove <名称> - 移除区域",
@@ -20,6 +19,7 @@
   "command.capturepoint.help.setcolor": "/capturepoint setcolor <名称> <颜色> - 设置据点显示颜色",
   "command.capturepoint.help.settoggle": "/capturepoint settoggle <名称> <true/false> - 切换范围显示",
   "command.capturepoint.help.zone_setrequired": "/capturepoint zone setrequired <区域> [依赖区域|clear] - 设置/清除区域依赖",
+  "command.capturepoint.help.zone_setcaptured": "/capturepoint zone setcaptured <区域> <true/false> - 设置区域占领状态（同步到所有子据点）",
   "command.capturepoint.help.relationships": "/capturepoint relationships - 查看所有据点和区域的关系",
   "command.capturepoint.help.savegraph": "/capturepoint savegraph - 从编辑器保存图数据（单机请使用GUI保存按钮）",
 
@@ -28,8 +28,7 @@
 
   "command.capturepoint.create.success": "已创建据点 '%s' 在 [%d, %d, %d]",
   "command.capturepoint.remove.success": "已移除据点 '%s'",
-  "command.capturepoint.setowner.success": "已将据点 '%s' 的所属设为 '%s'",
-  "command.capturepoint.clearowner.success": "已清除据点 '%s' 的所属",
+  "command.capturepoint.setcaptured.success": "已将据点 '%s' 的占领状态设为 %s",
   "command.capturepoint.error.player_only": "此命令必须由玩家执行",
   "command.capturepoint.error.not_found": "未找到据点 '%s'",
   "command.capturepoint.error.zone_exists": "区域 '%s' 已存在",
@@ -66,6 +65,7 @@
   "command.capturepoint.zone.status_entry": "区域 %s [%s] [%s]",
   "command.capturepoint.zone.setrequired.success": "已将区域 '%s' 的依赖区域设为 '%s'",
   "command.capturepoint.zone.setrequired.clear": "已清除区域 '%s' 的依赖区域",
+  "command.capturepoint.zone.setcaptured.success": "已将区域 '%s' 的占领状态设为 %s",
 
   "command.capturepoint.savegraph.hint": "单机请使用GUI保存按钮，专用服务器需通过自定义网络包实现。",
 
@@ -125,7 +125,7 @@
 
   "gui.capture_point_graph.dialog.advanced_config.title": "高级配置 - %s",
   "gui.capture_point_graph.dialog.advanced_config.info": "位置: [%d, %d, %d]",
-  "gui.capture_point_graph.dialog.advanced_config.owner": "所属:",
+  "gui.capture_point_graph.dialog.advanced_config.captured": "占领状态:",
   "gui.capture_point_graph.dialog.advanced_config.radius": "半径 (1-100):",
   "gui.capture_point_graph.dialog.advanced_config.show_range": "显示范围:",
   "gui.capture_point_graph.dialog.advanced_config.color": "显示颜色:",
@@ -170,7 +170,7 @@
   "toast.capture_point_block.point_not_found": "在世界数据中未找到据点 '%s'",
   "toast.capture_point_block.status_name": "名称: %s",
   "toast.capture_point_block.status_pos": "位置: [%d, %d, %d]",
-  "toast.capture_point_block.status_owner": "所属: %s",
+  "toast.capture_point_block.status_captured": "占领状态: %s",
   "toast.capture_point_block.status_radius": "半径: %d",
   "toast.capture_point_block.status_range": "范围显示: %s",
   "toast.capture_point_block.radius_invalid": "半径必须在 1 到 100 之间",

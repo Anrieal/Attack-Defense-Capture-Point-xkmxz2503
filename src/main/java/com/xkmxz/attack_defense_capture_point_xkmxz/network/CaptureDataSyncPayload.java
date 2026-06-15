@@ -68,7 +68,7 @@ public record CaptureDataSyncPayload(Map<String, PointRenderData> points) implem
         var pointMap = new HashMap<String, PointRenderData>();
         for (var entry : access.getPoints().values()) {
             pointMap.put(entry.name(), new PointRenderData(
-                    entry.pos(), entry.radius(), entry.displayColor(), entry.showRange()));
+                    entry.pos(), entry.radius(), entry.displayColor(), entry.showRange(), entry.captured()));
         }
         var payload = new CaptureDataSyncPayload(pointMap);
         for (var player : level.players()) {
@@ -84,7 +84,7 @@ public record CaptureDataSyncPayload(Map<String, PointRenderData> points) implem
         var pointMap = new HashMap<String, PointRenderData>();
         for (var entry : access.getPoints().values()) {
             pointMap.put(entry.name(), new PointRenderData(
-                    entry.pos(), entry.radius(), entry.displayColor(), entry.showRange()));
+                    entry.pos(), entry.radius(), entry.displayColor(), entry.showRange(), entry.captured()));
         }
         PacketDistributor.sendToPlayer(player, new CaptureDataSyncPayload(pointMap));
     }
@@ -99,6 +99,7 @@ public record CaptureDataSyncPayload(Map<String, PointRenderData> points) implem
     private static final String TAG_RADIUS = "radius";
     private static final String TAG_COLOR = "color";
     private static final String TAG_SHOW = "show";
+    private static final String TAG_CAPTURED = "captured";
 
     private static CaptureDataSyncPayload fromTag(CompoundTag tag) {
         var points = new HashMap<String, PointRenderData>();
@@ -111,7 +112,8 @@ public record CaptureDataSyncPayload(Map<String, PointRenderData> points) implem
                     pos,
                     entry.getDouble(TAG_RADIUS),
                     entry.getInt(TAG_COLOR),
-                    entry.getBoolean(TAG_SHOW)
+                    entry.getBoolean(TAG_SHOW),
+                    entry.contains(TAG_CAPTURED) && entry.getBoolean(TAG_CAPTURED)
             ));
         }
         return new CaptureDataSyncPayload(points);
@@ -129,6 +131,7 @@ public record CaptureDataSyncPayload(Map<String, PointRenderData> points) implem
             e.putDouble(TAG_RADIUS, entry.getValue().radius());
             e.putInt(TAG_COLOR, entry.getValue().displayColor());
             e.putBoolean(TAG_SHOW, entry.getValue().showRange());
+            e.putBoolean(TAG_CAPTURED, entry.getValue().captured());
             list.add(e);
         }
         tag.put(TAG_POINTS, list);
@@ -146,5 +149,5 @@ public record CaptureDataSyncPayload(Map<String, PointRenderData> points) implem
 
     // ---- 数据记录 ----
 
-    public record PointRenderData(BlockPos pos, double radius, int displayColor, boolean showRange) {}
+    public record PointRenderData(BlockPos pos, double radius, int displayColor, boolean showRange, boolean captured) {}
 }

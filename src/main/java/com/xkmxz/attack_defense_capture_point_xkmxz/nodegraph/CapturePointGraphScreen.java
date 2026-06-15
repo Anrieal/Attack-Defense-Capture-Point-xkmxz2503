@@ -295,8 +295,9 @@ public class CapturePointGraphScreen {
             double radius = getOptionDouble(nm, "radius");
             int color = getOptionInt(nm, "display_color");
             boolean showRange = getOptionBool(nm, "show_range");
+            boolean captured = getOptionBool(nm, "captured");
             newPoints.put(name, new CaptureManager.CapturePointEntry(
-                    name, pos, owner.isEmpty() ? null : owner,
+                    name, pos, captured,
                     radius, color, showRange));
         }
 
@@ -318,7 +319,7 @@ public class CapturePointGraphScreen {
             }
 
             newZones.put(name, new CaptureManager.ZoneEntry(
-                    name, cpList, reqZone.isEmpty() ? null : reqZone));
+                    name, cpList, reqZone.isEmpty() ? null : reqZone, false));
         }
 
         return new AbstractMap.SimpleEntry<>(newPoints, newZones);
@@ -636,14 +637,12 @@ public class CapturePointGraphScreen {
     }
 
     /**
-     * 同步据点节点选项（captured / owner(区域名) / position / radius / display_color / show_range）
-     * "所属"字段显示该据点连接的区域名称（由 mgr.findZoneForPoint 获取），
-     * 区域由连线管理，此处仅做只读展示。
+     * 同步据点节点选项（captured / position / radius / display_color / show_range）
+     * "所属"信息由 mgr.findZoneForPoint 获取并在标题中展示。
      * 编辑模式字段（radius / display_color / show_range）始终从 CaptureManager 同步。
      */
     private static void syncPointOptions(NodeModel nm, CaptureManager.CapturePointEntry entry, boolean isCaptured, @org.jetbrains.annotations.Nullable String zoneName) {
-        setOptionValue(nm, "captured", isCaptured);
-        setOptionValue(nm, "owner", zoneName != null ? zoneName : "");
+        setOptionValue(nm, "captured", entry.captured());
         setOptionValue(nm, "position", entry.pos().getX() + ", " + entry.pos().getY() + ", " + entry.pos().getZ());
         // 编辑模式额外字段
         setOptionValue(nm, "radius", entry.radius());

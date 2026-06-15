@@ -66,8 +66,8 @@ public interface ICaptureDataAccess {
     /** 移除据点 */
     void removePoint(String name);
 
-    /** 设置据点所属者（owner） */
-    void setPointOwner(String name, @Nullable String owner);
+    /** 设置据点占领状态（同步规则：会触发所属区域的占领状态重新计算） */
+    void setPointCaptured(String name, boolean captured);
 
     /** 设置据点半径 */
     void setPointRadius(String name, double radius);
@@ -111,6 +111,13 @@ public interface ICaptureDataAccess {
     /** 设置或清除区域的依赖区域 */
     void setZoneRequiredZone(String zoneName, @Nullable String requiredZone);
 
+    /**
+     * 设置区域占领状态，并同步到区域内所有据点（双向同步规则③）。
+     * 区域已占领 → 所有子据点标记为已占领
+     * 区域未占领 → 所有子据点标记为未占领
+     */
+    void setZoneCaptured(String zoneName, boolean captured);
+
     // ================================================================
     //  查询方法
     // ================================================================
@@ -118,7 +125,7 @@ public interface ICaptureDataAccess {
     /** 查找据点所属的区域名称，不在任何区域则返回 null */
     @Nullable String findZoneForPoint(String pointName);
 
-    /** 判断区域是否已被完全占领（所有据点都有 owner） */
+    /** 判断区域是否已被占领（返回区域自身的 captured 状态） */
     boolean isZoneCaptured(String zoneName);
 
     /** 判断区域是否可访问（前置区域已占领或没有前置依赖） */

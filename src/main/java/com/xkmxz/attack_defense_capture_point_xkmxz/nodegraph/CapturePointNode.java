@@ -31,16 +31,10 @@ public class CapturePointNode extends Node {
     @Override
     public void onDefineOptions(IOptionDefinitionContext context) {
         super.onDefineOptions(context);
-        // captured 状态选项（检查器显示）
+        // captured 占领状态 - 布尔类型（可编辑）
         context.addOption("captured", Boolean.class)
                 .withDefaultValue(false)
                 .withDisplayName(Component.translatable("node.capture_point.option.captured"))
-                .withoutConfigurator() // 不在节点体内显示，仅在检查器显示
-                .build();
-        // owner 所属者 - 字符串类型（可编辑）
-        context.addOption("owner", String.class)
-                .withDefaultValue("")
-                .withDisplayName(Component.translatable("node.capture_point.option.owner"))
                 .build();
         // position 位置 - 只读坐标信息
         context.addOption("position", String.class)

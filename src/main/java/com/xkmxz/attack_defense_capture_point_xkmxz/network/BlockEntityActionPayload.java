@@ -19,13 +19,15 @@ import net.neoforged.neoforge.network.handling.IPayloadContext;
  * 由服务端 CaptureManager 统一处理，实现客户端-服务端严格分离。
  *
  * action 取值：
- *   "create_point"     -> data = "pointName"
- *   "create_point_at"  -> data = "pointName,x,y,z,radius"
- *   "set_radius"       -> data = "pointName,radius"
- *   "set_color"        -> data = "pointName,color"
- *   "toggle_range"     -> data = "pointName,true/false"
+ *   \"create_point\"     -> data = \"pointName\"
+ *   \"create_point_at\"  -> data = \"pointName,x,y,z,radius\"
+ *   \"set_radius\"       -> data = \"pointName,radius\"
+ *   \"set_color\"        -> data = \"pointName,color\"
+ *   \"toggle_range\"     -> data = \"pointName,true/false\"
+ *   \"set_captured\"     -> data = \"pointName,true/false\"
  *   \"add_to_zone\"      -> data = \"zoneName,pointName\"
  *   \"remove_from_zone\" -> data = \"pointName\"
+ *   \"zone_set_captured\" -> data = \"zoneName,true/false\"
  *   \"block_unbind\"     -> data = \"pointName\"
  */
 public record BlockEntityActionPayload(
@@ -106,6 +108,20 @@ public record BlockEntityActionPayload(
                             int color = Integer.parseInt(parts[1]);
                             access.setPointDisplayColor(name, color);
                         } catch (NumberFormatException ignored) {}
+                    }
+                }
+                case "set_captured" -> {
+                    String name = parts[0];
+                    if (parts.length >= 2) {
+                        boolean captured = Boolean.parseBoolean(parts[1]);
+                        access.setPointCaptured(name, captured);
+                    }
+                }
+                case "zone_set_captured" -> {
+                    String zoneName = parts[0];
+                    if (parts.length >= 2) {
+                        boolean captured = Boolean.parseBoolean(parts[1]);
+                        access.setZoneCaptured(zoneName, captured);
                     }
                 }
                 case "toggle_range" -> {

@@ -47,8 +47,8 @@ public class ServerCaptureDataAccess implements ICaptureDataAccess {
     }
 
     @Override
-    public void setPointOwner(String name, @Nullable String owner) {
-        manager.setPointOwner(name, owner);
+    public void setPointCaptured(String name, boolean captured) {
+        manager.setPointCaptured(name, captured);
     }
 
     @Override
@@ -98,6 +98,11 @@ public class ServerCaptureDataAccess implements ICaptureDataAccess {
     @Override
     public void setZoneRequiredZone(String zoneName, @Nullable String requiredZone) {
         manager.setZoneRequiredZone(zoneName, requiredZone);
+    }
+
+    @Override
+    public void setZoneCaptured(String zoneName, boolean captured) {
+        manager.setZoneCaptured(zoneName, captured);
     }
 
     // ================================================================

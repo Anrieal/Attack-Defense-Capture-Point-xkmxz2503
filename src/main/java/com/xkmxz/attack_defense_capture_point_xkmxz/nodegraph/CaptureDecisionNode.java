@@ -69,53 +69,24 @@ public class CaptureDecisionNode extends Node {
     public void onDefinePorts(IPortDefinitionContext context) {
         super.onDefinePorts(context);
 
-        // ---- 据点信号端口 ----
-
-        // 输入端口 - 接收据点信号
+        // ---- 据点信号路由 ----
         context.addInputPort("target", CapturePointTypes.POINT_SIGNAL)
                 .withDisplayName(Component.translatable("node.capture_decision.port.target"))
                 .build();
-
-        // 输出端口 - 条件满足时据点信号从此输出
         context.addOutputPort("true_out", CapturePointTypes.POINT_SIGNAL)
                 .withDisplayName(Component.translatable("node.capture_decision.port.true_out"))
                 .build();
-
-        // 输出端口 - 条件不满足时据点信号从此输出
         context.addOutputPort("false_out", CapturePointTypes.POINT_SIGNAL)
                 .withDisplayName(Component.translatable("node.capture_decision.port.false_out"))
                 .build();
 
-        // ---- 区域信号端口（依赖接口）----
-
-        // 输入端口 - 接收区域依赖信号（来自 zone_out）
-        context.addInputPort("zone_target", CapturePointTypes.ZONE_SIGNAL)
-                .withDisplayName(Component.translatable("node.capture_decision.port.zone_target"))
-                .build();
-
-        // 输出端口 - 条件满足时区域依赖信号从此输出（连接至 required_zone）
-        context.addOutputPort("zone_true_out", CapturePointTypes.ZONE_SIGNAL)
-                .withDisplayName(Component.translatable("node.capture_decision.port.zone_true_out"))
-                .build();
-
-        // 输出端口 - 条件不满足时区域依赖信号从此输出（连接至 required_zone）
-        context.addOutputPort("zone_false_out", CapturePointTypes.ZONE_SIGNAL)
-                .withDisplayName(Component.translatable("node.capture_decision.port.zone_false_out"))
-                .build();
-
-        // ---- 🔓 解锁信号端口（独立于区域依赖的解锁接口）----
-
-        // 输入端口 - 接收区域解锁信号（来自 zone unlock_out）
+        // ---- 🔓 解锁信号路由（独立于依赖接口）----
         context.addInputPort("unlock_target", CapturePointTypes.UNLOCK_SIGNAL)
                 .withDisplayName(Component.translatable("node.capture_decision.port.unlock_target"))
                 .build();
-
-        // 输出端口 - 条件满足时解锁信号从此输出（连接至 zone unlock_in）
         context.addOutputPort("unlock_true_out", CapturePointTypes.UNLOCK_SIGNAL)
                 .withDisplayName(Component.translatable("node.capture_decision.port.unlock_true_out"))
                 .build();
-
-        // 输出端口 - 条件不满足时解锁信号从此输出（连接至 zone unlock_in）
         context.addOutputPort("unlock_false_out", CapturePointTypes.UNLOCK_SIGNAL)
                 .withDisplayName(Component.translatable("node.capture_decision.port.unlock_false_out"))
                 .build();

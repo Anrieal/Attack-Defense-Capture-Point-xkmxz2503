@@ -263,10 +263,6 @@ public class CapturePointGraphScreen {
         var decisionInputs = new LinkedHashMap<String, List<String>>();
         // decisionOutputs: decisionName → (portName → [zoneName, ...]) 判断器各输出端口连接的区域
         var decisionOutputs = new LinkedHashMap<String, Map<String, List<String>>>();
-        // zoneDecisionInputs: decisionName → [zoneName, ...] 判断器区域输入（连接到zone_target端口的区域）
-        var zoneDecisionInputs = new LinkedHashMap<String, List<String>>();
-        // zoneDecisionOutputs: decisionName → (portName → [zoneName, ...]) 判断器区域输出端口连接的区域
-        var zoneDecisionOutputs = new LinkedHashMap<String, Map<String, List<String>>>();
         // unlockDecisionInputs: decisionName → [zoneName, ...] 🔓 判断器解锁输入（连接到unlock_target端口的区域）
         var unlockDecisionInputs = new LinkedHashMap<String, List<String>>();
         // unlockDecisionOutputs: decisionName → (portName → [zoneName, ...]) 🔓 判断器解锁输出端口连接的区域
@@ -307,28 +303,15 @@ public class CapturePointGraphScreen {
                 else if (hasOutputPort(fromNm, "zone_out") && hasInputPort(toNm, "required_zone")) {
                     wireBasedRequiredZone.put(toName, fromName);
                 }
-                // 5. 区域→判断器(区域信号): from=zone_out(O)  to=zone_target(I)
-                else if (hasOutputPort(fromNm, "zone_out") && hasInputPort(toNm, "zone_target")) {
-                    zoneDecisionInputs.computeIfAbsent(toName, k -> new ArrayList<>()).add(fromName);
-                }
-                // 6. 判断器(区域信号)→区域依赖: from=zone_true_out/zone_false_out(O)  to=required_zone(I)
-                else if (hasInputPort(toNm, "required_zone") && hasOutputPort(fromNm, "zone_true_out")) {
-                    zoneDecisionOutputs.computeIfAbsent(fromName, k -> new LinkedHashMap<>())
-                            .computeIfAbsent("zone_true_out", k -> new ArrayList<>()).add(toName);
-                }
-                else if (hasInputPort(toNm, "required_zone") && hasOutputPort(fromNm, "zone_false_out")) {
-                    zoneDecisionOutputs.computeIfAbsent(fromName, k -> new LinkedHashMap<>())
-                            .computeIfAbsent("zone_false_out", k -> new ArrayList<>()).add(toName);
-                }
-                // 7. 🔓 区域→区域解锁: from=unlock_out(O)  to=unlock_in(I) — 独立于区域依赖的解锁接口
+                // 5. 🔓 区域→区域解锁: from=unlock_out(O)  to=unlock_in(I)
                 else if (hasOutputPort(fromNm, "unlock_out") && hasInputPort(toNm, "unlock_in")) {
                     wireBasedUnlockDeps.computeIfAbsent(toName, k -> new ArrayList<>()).add(fromName);
                 }
-                // 8. 🔓 区域→判断器(解锁信号): from=unlock_out(O)  to=unlock_target(I)
+                // 6. 🔓 区域→判断器(解锁信号): from=unlock_out(O)  to=unlock_target(I)
                 else if (hasOutputPort(fromNm, "unlock_out") && hasInputPort(toNm, "unlock_target")) {
                     unlockDecisionInputs.computeIfAbsent(toName, k -> new ArrayList<>()).add(fromName);
                 }
-                // 9. 🔓 判断器(解锁信号)→区域解锁: from=unlock_true_out/unlock_false_out(O)  to=unlock_in(I)
+                // 7. 🔓 判断器(解锁信号)→区域解锁: from=unlock_true_out/unlock_false_out(O)  to=unlock_in(I)
                 else if (hasInputPort(toNm, "unlock_in") && hasOutputPort(fromNm, "unlock_true_out")) {
                     unlockDecisionOutputs.computeIfAbsent(fromName, k -> new LinkedHashMap<>())
                             .computeIfAbsent("unlock_true_out", k -> new ArrayList<>()).add(toName);
@@ -454,56 +437,7 @@ public class CapturePointGraphScreen {
                     name, cpList, reqZone, zoneCaptured, null, unlockDepList));
         }
 
-        // ---- Phase 6: 区域判断器条件路由 ----
-        // 评估判断器的条件并路由区域依赖信号（zone_out → zone_target → decision → zone_true_out/false_out → required_zone）
-        var zoneDecisionRoutedDeps = new LinkedHashMap<String, String>();
-
-        for (var decisionEntry : decisionModels.entrySet()) {
-            String decisionName = decisionEntry.getKey();
-            var nm = decisionEntry.getValue();
-
-            String condition = getOptionString(nm, "condition");
-            String targetTeam = getOptionString(nm, "target_team");
-
-            // 获取输入此判断器的区域列表（来自 zone_out → zone_target 连线）
-            List<String> inputZones = zoneDecisionInputs.get(decisionName);
-            if (inputZones == null || inputZones.isEmpty()) continue;
-
-            // 获取此判断器的区域输出映射
-            Map<String, List<String>> outputs = zoneDecisionOutputs.get(decisionName);
-            if (outputs == null || outputs.isEmpty()) continue;
-
-            // 对每个输入区域执行条件判断
-            for (String zoneName : inputZones) {
-                var zoneEntry = newZones.get(zoneName);
-                if (zoneEntry == null) continue;
-
-                // 评估条件（基于区域的状态：captured / owner_team / not_captured）
-                boolean conditionMet = evaluateZoneCondition(condition, targetTeam, zoneEntry);
-
-                // 根据结果选择输出端口
-                String outputPort = conditionMet ? "zone_true_out" : "zone_false_out";
-                List<String> targetZones = outputs.get(outputPort);
-                if (targetZones == null || targetZones.isEmpty()) continue;
-
-                // 将区域名称设置为下游区域的 requiredZone
-                for (String targetZoneName : targetZones) {
-                    zoneDecisionRoutedDeps.put(targetZoneName, zoneName);
-                }
-            }
-        }
-
-        // 用判断器路由的依赖关系覆盖区域 entries 的 requiredZone（判断器路由优先于直连）
-        for (var entry : zoneDecisionRoutedDeps.entrySet()) {
-            String zoneName = entry.getKey();
-            String requiredZone = entry.getValue();
-            var existing = newZones.get(zoneName);
-            if (existing != null && requiredZone != null && !requiredZone.isEmpty()) {
-                newZones.put(zoneName, existing.withRequiredZone(requiredZone));
-            }
-        }
-
-        // ---- Phase 7: 🔓 解锁信号判断器条件路由 ----
+        // ---- Phase 6: 🔓 解锁信号判断器条件路由 ----
         // 评估判断器的条件并路由解锁信号（unlock_out → unlock_target → decision → unlock_true_out/false_out → unlock_in）
         var unlockDecisionRoutedDeps = new LinkedHashMap<String, List<String>>();
 
@@ -1010,10 +944,18 @@ public class CapturePointGraphScreen {
                                 nm.setTitle(Component.literal(name));
                             }
                         } else if (hasInputPort(nm, "target")) {
-                            // 判断器节点：显示名称 + 条件类型
+                            // 判断器节点：显示名称 + 条件类型（中文）
                             String condition = getOptionString(nm, "condition");
                             if (condition == null || condition.isEmpty()) condition = "captured";
-                            nm.setTitle(Component.literal(name + " [? " + condition + "]"));
+                            String cn = switch (condition) {
+                                case "captured" -> "已占领";
+                                case "not_captured" -> "未占领";
+                                case "owner_team" -> "队伍匹配";
+                                case "capturing" -> "占领中";
+                                case "not_capturing" -> "空闲";
+                                default -> condition;
+                            };
+                            nm.setTitle(Component.literal(name + " [? " + cn + "]"));
                         } else if (hasOutputPort(nm, "zone_out") || hasInputPort(nm, "point_in")) {
                             // 区域节点：显示名称 + 占领状态 + 点数
                             var entry = zones.get(name);

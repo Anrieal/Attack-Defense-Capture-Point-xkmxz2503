@@ -8,17 +8,23 @@ import com.lowdragmc.lowdraglib2.nodegraphtookit.model.node.definition.IOptionDe
 import net.minecraft.network.chat.Component;
 
 /**
- * 判断器节点 — 根据条件将据点信号分配到不同输出路径。<br>
- * 接收一个据点信号（POINT_SIGNAL），根据配置的条件判断，
- * 将据点信号输出到 {@code true_out}（条件满足）或 {@code false_out}（条件不满足）端口。<br>
+ * 判断器节点 — 根据条件将信号分配到不同输出路径。<br>
+ * <br>
+ * <b>据点信号路由：</b><br>
+ * 接收 POINT_SIGNAL（target），根据条件输出到 true_out / false_out（均为 POINT_SIGNAL），<br>
+ * 用于将据点按条件分配到不同的区域。<br>
+ * <br>
+ * <b>区域信号路由：</b><br>
+ * 接收 ZONE_SIGNAL（zone_target），根据条件输出到 zone_true_out / zone_false_out（均为 ZONE_SIGNAL），<br>
+ * 用于控制区域间的依赖解锁关系。<br>
  * <br>
  * <b>条件类型 (condition)：</b>
  * <ul>
- *   <li>{@code captured} — 据点的 captured 为 true</li>
- *   <li>{@code not_captured} — 据点的 captured 为 false</li>
- *   <li>{@code owner_team} — 据点的 ownerTeam 匹配 target_team</li>
- *   <li>{@code capturing} — 据点的 capturingTeam 匹配 target_team</li>
- *   <li>{@code not_capturing} — 据点的 capturingTeam 为 null 或不匹配 target_team</li>
+ *   <li>{@code captured} — captured 为 true</li>
+ *   <li>{@code not_captured} — captured 为 false</li>
+ *   <li>{@code owner_team} — ownerTeam 匹配 target_team</li>
+ *   <li>{@code capturing} — capturingTeam 匹配 target_team（仅据点）</li>
+ *   <li>{@code not_capturing} — capturingTeam 为 null（仅据点）</li>
  * </ul>
  */
 public class CaptureDecisionNode extends Node {
@@ -63,6 +69,8 @@ public class CaptureDecisionNode extends Node {
     public void onDefinePorts(IPortDefinitionContext context) {
         super.onDefinePorts(context);
 
+        // ---- 据点信号端口 ----
+
         // 输入端口 - 接收据点信号
         context.addInputPort("target", CapturePointTypes.POINT_SIGNAL)
                 .withDisplayName(Component.translatable("node.capture_decision.port.target"))
@@ -76,6 +84,23 @@ public class CaptureDecisionNode extends Node {
         // 输出端口 - 条件不满足时据点信号从此输出
         context.addOutputPort("false_out", CapturePointTypes.POINT_SIGNAL)
                 .withDisplayName(Component.translatable("node.capture_decision.port.false_out"))
+                .build();
+
+        // ---- 区域信号端口 ----
+
+        // 输入端口 - 接收区域依赖信号（来自 zone_out）
+        context.addInputPort("zone_target", CapturePointTypes.ZONE_SIGNAL)
+                .withDisplayName(Component.translatable("node.capture_decision.port.zone_target"))
+                .build();
+
+        // 输出端口 - 条件满足时区域依赖信号从此输出（连接至 required_zone）
+        context.addOutputPort("zone_true_out", CapturePointTypes.ZONE_SIGNAL)
+                .withDisplayName(Component.translatable("node.capture_decision.port.zone_true_out"))
+                .build();
+
+        // 输出端口 - 条件不满足时区域依赖信号从此输出（连接至 required_zone）
+        context.addOutputPort("zone_false_out", CapturePointTypes.ZONE_SIGNAL)
+                .withDisplayName(Component.translatable("node.capture_decision.port.zone_false_out"))
                 .build();
     }
 }

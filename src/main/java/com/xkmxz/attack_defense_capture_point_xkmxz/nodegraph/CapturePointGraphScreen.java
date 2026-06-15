@@ -222,11 +222,13 @@ public class CapturePointGraphScreen {
      * <b>处理流程：</b><br>
      * 1. 收集所有节点（据点/区域/判断器）<br>
      * 2. 解析连线：直连（point→zone）、判断器输入（point→decision）、<br>
-     *    判断器输出（decision→zone）、区域依赖（zone→zone）<br>
+     *    判断器输出（decision→zone）、区域依赖（zone→zone）、<br>
+     *    区域→判断器（zone_out→zone_target）、判断器→区域依赖（zone_true_out/false_out→required_zone）<br>
      * 3. 构建据点数据<br>
-     * 4. 应用判断器条件路由：根据每个判断器的条件，将据点分配到 true_out 或 false_out<br>
+     * 4. 据点判断器条件路由：根据条件将据点分配到 true_out 或 false_out<br>
      * 5. 构建区域数据（直连据点 + 判断器路由据点）<br>
-     * 6. 双向同步规则
+     * 6. 区域判断器条件路由：根据条件将区域依赖（zone_out）分配到 zone_true_out 或 zone_false_out<br>
+     * 7. 双向同步规则
      */
     private Map.Entry<Map<String, CaptureManager.CapturePointEntry>, Map<String, CaptureManager.ZoneEntry>> buildSnapshotFromGraph() {
         var newPoints = new LinkedHashMap<String, CaptureManager.CapturePointEntry>();
@@ -261,6 +263,10 @@ public class CapturePointGraphScreen {
         var decisionInputs = new LinkedHashMap<String, List<String>>();
         // decisionOutputs: decisionName → (portName → [zoneName, ...]) 判断器各输出端口连接的区域
         var decisionOutputs = new LinkedHashMap<String, Map<String, List<String>>>();
+        // zoneDecisionInputs: decisionName → [zoneName, ...] 判断器区域输入（连接到zone_target端口的区域）
+        var zoneDecisionInputs = new LinkedHashMap<String, List<String>>();
+        // zoneDecisionOutputs: decisionName → (portName → [zoneName, ...]) 判断器区域输出端口连接的区域
+        var zoneDecisionOutputs = new LinkedHashMap<String, Map<String, List<String>>>();
 
         for (var element : graph.graphModel.getGraphElementModels()) {
             if (element instanceof WireModel wire) {
@@ -296,6 +302,19 @@ public class CapturePointGraphScreen {
                 // 4. 区域→区域依赖: from=zone_out(O)  to=required_zone(I)
                 else if (hasOutputPort(fromNm, "zone_out") && hasInputPort(toNm, "required_zone")) {
                     wireBasedRequiredZone.put(toName, fromName);
+                }
+                // 5. 区域→判断器(区域信号): from=zone_out(O)  to=zone_target(I)
+                else if (hasOutputPort(fromNm, "zone_out") && hasInputPort(toNm, "zone_target")) {
+                    zoneDecisionInputs.computeIfAbsent(toName, k -> new ArrayList<>()).add(fromName);
+                }
+                // 6. 判断器(区域信号)→区域依赖: from=zone_true_out/zone_false_out(O)  to=required_zone(I)
+                else if (hasInputPort(toNm, "required_zone") && hasOutputPort(fromNm, "zone_true_out")) {
+                    zoneDecisionOutputs.computeIfAbsent(fromName, k -> new LinkedHashMap<>())
+                            .computeIfAbsent("zone_true_out", k -> new ArrayList<>()).add(toName);
+                }
+                else if (hasInputPort(toNm, "required_zone") && hasOutputPort(fromNm, "zone_false_out")) {
+                    zoneDecisionOutputs.computeIfAbsent(fromName, k -> new LinkedHashMap<>())
+                            .computeIfAbsent("zone_false_out", k -> new ArrayList<>()).add(toName);
                 }
             }
         }
@@ -413,6 +432,55 @@ public class CapturePointGraphScreen {
                     name, cpList, reqZone.isEmpty() ? null : reqZone, zoneCaptured, null));
         }
 
+        // ---- Phase 6: 区域判断器条件路由 ----
+        // 评估判断器的条件并路由区域依赖信号（zone_out → zone_target → decision → zone_true_out/false_out → required_zone）
+        var zoneDecisionRoutedDeps = new LinkedHashMap<String, String>();
+
+        for (var decisionEntry : decisionModels.entrySet()) {
+            String decisionName = decisionEntry.getKey();
+            var nm = decisionEntry.getValue();
+
+            String condition = getOptionString(nm, "condition");
+            String targetTeam = getOptionString(nm, "target_team");
+
+            // 获取输入此判断器的区域列表（来自 zone_out → zone_target 连线）
+            List<String> inputZones = zoneDecisionInputs.get(decisionName);
+            if (inputZones == null || inputZones.isEmpty()) continue;
+
+            // 获取此判断器的区域输出映射
+            Map<String, List<String>> outputs = zoneDecisionOutputs.get(decisionName);
+            if (outputs == null || outputs.isEmpty()) continue;
+
+            // 对每个输入区域执行条件判断
+            for (String zoneName : inputZones) {
+                var zoneEntry = newZones.get(zoneName);
+                if (zoneEntry == null) continue;
+
+                // 评估条件（基于区域的状态：captured / owner_team / not_captured）
+                boolean conditionMet = evaluateZoneCondition(condition, targetTeam, zoneEntry);
+
+                // 根据结果选择输出端口
+                String outputPort = conditionMet ? "zone_true_out" : "zone_false_out";
+                List<String> targetZones = outputs.get(outputPort);
+                if (targetZones == null || targetZones.isEmpty()) continue;
+
+                // 将区域名称设置为下游区域的 requiredZone
+                for (String targetZoneName : targetZones) {
+                    zoneDecisionRoutedDeps.put(targetZoneName, zoneName);
+                }
+            }
+        }
+
+        // 用判断器路由的依赖关系覆盖区域 entries 的 requiredZone（判断器路由优先于直连）
+        for (var entry : zoneDecisionRoutedDeps.entrySet()) {
+            String zoneName = entry.getKey();
+            String requiredZone = entry.getValue();
+            var existing = newZones.get(zoneName);
+            if (existing != null && requiredZone != null && !requiredZone.isEmpty()) {
+                newZones.put(zoneName, existing.withRequiredZone(requiredZone));
+            }
+        }
+
         // 规则②：根据所有子据点的占领状态重新计算区域 captured
         for (var zoneName : List.copyOf(newZones.keySet())) {
             var zone = newZones.get(zoneName);
@@ -460,6 +528,33 @@ public class CapturePointGraphScreen {
                 yield targetTeam.equals(pointEntry.capturingTeam());
             }
             case "not_capturing" -> pointEntry.capturingTeam() == null;
+            default -> false;
+        };
+    }
+
+    /**
+     * 评估判断器对区域的条件是否满足。<br>
+     * <br>
+     * <b>支持的条件类型：</b>
+     * <ul>
+     *   <li>{@code captured} — 区域已被占领（captured == true）</li>
+     *   <li>{@code not_captured} — 区域未被占领（captured == false）</li>
+     *   <li>{@code owner_team} — 区域的 ownerTeam 匹配 target_team</li>
+     * </ul>
+     */
+    private static boolean evaluateZoneCondition(String condition, String targetTeam,
+                                                  CaptureManager.ZoneEntry zoneEntry) {
+        if (condition == null || condition.isEmpty()) condition = "captured";
+
+        return switch (condition) {
+            case "captured" -> zoneEntry.captured();
+            case "not_captured" -> !zoneEntry.captured();
+            case "owner_team" -> {
+                if (targetTeam == null || targetTeam.isEmpty()) yield false;
+                yield targetTeam.equals(zoneEntry.ownerTeam());
+            }
+            // capturing / not_capturing 对区域无效，默认走 false
+            case "capturing", "not_capturing" -> false;
             default -> false;
         };
     }

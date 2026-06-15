@@ -218,11 +218,10 @@ public class Attack_defense_capture_point_xkmxz {
                     // ============================================================
                     LAST_ACTIVITY_TICK.put(name, tickCounter);
 
-                    // 统计各队伍人数（防守方不计入进攻统计）
+                    // 统计各队伍人数（所有队伍平等计入）
                     var teamCount = new java.util.HashMap<String, Integer>();
                     for (var p : nearbyPlayers) {
                         String t = p.getTeam() != null ? p.getTeam().getName() : "__no_team__";
-                        if (defender != null && defender.equals(t)) continue;
                         teamCount.merge(t, 1, Integer::sum);
                     }
 
@@ -235,6 +234,16 @@ public class Attack_defense_capture_point_xkmxz {
                             .max(java.util.Comparator.comparingInt(java.util.Map.Entry::getValue))
                             .get();
                     String dominantTeam = maxEntry.getKey();
+
+                    // 防守方模式下：如果多数方不是防守方 → 从计数中剔除防守方，让进攻方公平竞争
+                    if (defender != null && !dominantTeam.equals(defender)) {
+                        teamCount.remove(defender);
+                        if (teamCount.isEmpty()) continue;
+                        var reMax = teamCount.entrySet().stream()
+                                .max(java.util.Comparator.comparingInt(java.util.Map.Entry::getValue))
+                                .get();
+                        dominantTeam = reMax.getKey();
+                    }
 
                     // 防守方模式下检查区域可达性（逐层占领）
                     if (defender != null) {

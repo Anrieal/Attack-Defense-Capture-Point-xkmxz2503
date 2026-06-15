@@ -324,13 +324,11 @@ public class CapturePointGraphScreen {
                 cpList = new ArrayList<>();
             }
 
-            // 规则③：区域已占领 → 强制同步到所有子据点
-            if (zoneCaptured) {
-                for (var cpName : cpList) {
-                    var existing = newPoints.get(cpName);
-                    if (existing != null) {
-                        newPoints.put(cpName, existing.withCaptured(true));
-                    }
+            // 规则③：区域占领状态 → 强制同步到所有子据点（双向！true和false都传播）
+            for (var cpName : cpList) {
+                var existing = newPoints.get(cpName);
+                if (existing != null) {
+                    newPoints.put(cpName, existing.withCaptured(zoneCaptured));
                 }
             }
 

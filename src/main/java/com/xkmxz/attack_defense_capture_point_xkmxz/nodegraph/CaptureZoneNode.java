@@ -10,11 +10,17 @@ import com.lowdragmc.lowdraglib2.nodegraphtookit.model.node.definition.IOptionDe
 import net.minecraft.network.chat.Component;
 
 /**
- * 区域节点 - 代表一个占领区域。
- * 具有一个输入端口（point_in）接收来自 CapturePointNode 的连接（表示"区域包含据点"），
- * 一个输出端口（zone_out）连接到其他区域的依赖输入（表示"区域先后关系"），
- * 以及一个输入端口（required_zone）接收来自其他区域的依赖连接。
- * 编辑模式：description、can_edit_points 可编辑
+ * 区域节点 - 代表一个占领区域。<br>
+ * <br>
+ * <b>职责：纯结构声明，不负责逻辑判断。</b><br>
+ * <ul>
+ *   <li>point_in — 接收据点信号（声明哪些据点属于此区域）</li>
+ *   <li>zone_out — 发出依赖信号（声明此区域是其他区域的前置）</li>
+ *   <li>required_zone — 接收依赖信号（声明此区域依赖哪个前置区域）</li>
+ *   <li>unlock_in — 接收解锁信号（由逻辑组件在运行时控制）</li>
+ * </ul>
+ * 所有逻辑判断（条件评估、解锁控制等）由 CaptureConditionNode、LogicGateNode、
+ * CaptureActionNode 等逻辑部件完成。
  */
 public class CaptureZoneNode extends Node {
 
@@ -79,7 +85,7 @@ public class CaptureZoneNode extends Node {
         var pointInPort = (PortModel) context.addInputPort("point_in", CapturePointTypes.POINT_SIGNAL)
                 .withDisplayName(Component.translatable("node.capture_zone.port.point_in"))
                 .build();
-        pointInPort.setPortCapacity(PortCapacity.MULTIPLE); // 允许多个据点连线到此端口
+        pointInPort.setPortCapacity(PortCapacity.MULTIPLE);
 
         // ---- 区域依赖接口 (zone_out → required_zone) ----
         // 输出端口 - 发出区域信号（连接到其他区域的 required_zone 输入，表示区域先后关系）
@@ -91,15 +97,11 @@ public class CaptureZoneNode extends Node {
                 .withDisplayName(Component.translatable("node.capture_zone.port.required_zone"))
                 .build();
 
-        // ---- 区域解锁接口 (unlock_out → unlock_in)，独立于区域依赖接口 ----
-        // 输出端口 - 发出解锁信号（此区域已解锁时通知依赖方）
-        context.addOutputPort("unlock_out", CapturePointTypes.UNLOCK_SIGNAL)
-                .withDisplayName(Component.translatable("node.capture_zone.port.unlock_out"))
-                .build();
-        // 输入端口 - 接收解锁信号（来自前置区域的 unlock_out，支持多连线）
+        // ---- 区域解锁接口（仅输入）----
+        // 输入端口 - 接收解锁信号（由逻辑组件发出，运行时控制此区域的可访问性）
         var unlockInPort = (PortModel) context.addInputPort("unlock_in", CapturePointTypes.UNLOCK_SIGNAL)
                 .withDisplayName(Component.translatable("node.capture_zone.port.unlock_in"))
                 .build();
-        unlockInPort.setPortCapacity(PortCapacity.MULTIPLE); // 允许多个前置区域连线到此端口
+        unlockInPort.setPortCapacity(PortCapacity.MULTIPLE);
     }
 }

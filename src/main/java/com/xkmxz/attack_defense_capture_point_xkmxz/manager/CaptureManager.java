@@ -518,8 +518,8 @@ public class CaptureManager extends SavedData {
     }
 
     /**
-     * 设置区域的解锁依赖列表（unlock_out → unlock_in 链路）。
-     * 解锁依赖控制区域的运行时可访问性，独立于 zone_out → required_zone 的依赖声明。
+     * 设置区域的解锁依赖列表。
+     * 解锁依赖控制区域的运行时可访问性，由逻辑组件（CaptureActionNode）在运行时控制。
      * @param zoneName 区域名称
      * @param unlockDeps 解锁依赖的区域名称列表
      */
@@ -555,8 +555,7 @@ public class CaptureManager extends SavedData {
         var zone = zones.get(zoneName);
         if (zone == null) return false;
 
-        // 解锁完全通过节点图的 unlock_out → unlock_in 链路管理，
-        // 不再回退到 requiredZone，移除据点自身携带的解锁机制
+        // 解锁依赖由逻辑组件（CaptureActionNode）在运行时通过 CaptureManager API 控制。
         if (zone.unlockDependencies() != null && !zone.unlockDependencies().isEmpty()) {
             for (var dep : zone.unlockDependencies()) {
                 if (!canAccessZone(dep)) return false;

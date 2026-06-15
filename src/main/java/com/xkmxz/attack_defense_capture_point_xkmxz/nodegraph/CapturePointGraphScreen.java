@@ -219,8 +219,7 @@ public class CapturePointGraphScreen {
      * <br>
      * <b>处理流程：</b><br>
      * 1. 收集所有节点（据点/区域/条件/逻辑门/动作/常量）<br>
-     * 2. 解析连线：直连（point→zone）、条件输入（point→condition）、<br>
-     *    区域依赖（zone→zone）、解锁依赖（unlock_out→unlock_in）<br>
+     * 2. 解析连线：直连（point→zone）、区域依赖（zone→required_zone）<br>
      * 3. 构建据点数据<br>
      * 4. 条件链评估：利用 CaptureConditionNode + LogicGateNode 评估条件，<br>
      *    替代旧的硬编码 CaptureDecisionNode 条件路由<br>
@@ -266,20 +265,14 @@ public class CapturePointGraphScreen {
         }
 
         // ---- Phase 2: 解析连线 ----
-        // wireBasedZonePoints: zoneName → [pointName, ...] 直连（不经过判断器）
+        // wireBasedZonePoints: zoneName → [pointName, ...] 直连
         var wireBasedZonePoints = new LinkedHashMap<String, List<String>>();
         // wireBasedRequiredZone: zoneName → requiredZoneName 区域依赖
         var wireBasedRequiredZone = new LinkedHashMap<String, String>();
-        // wireBasedUnlockDeps: zoneName → [depZoneName, ...] 🔓 解锁依赖（unlock_out → unlock_in），独立于区域信号
-        var wireBasedUnlockDeps = new LinkedHashMap<String, List<String>>();
         // decisionInputs: decisionName → [pointName, ...] 判断器输入（连接到target端口的据点）
         var decisionInputs = new LinkedHashMap<String, List<String>>();
         // decisionOutputs: decisionName → (portName → [zoneName, ...]) 判断器各输出端口连接的区域
         var decisionOutputs = new LinkedHashMap<String, Map<String, List<String>>>();
-        // unlockDecisionInputs: decisionName → [zoneName, ...] 🔓 判断器解锁输入（连接到unlock_target端口的区域）
-        var unlockDecisionInputs = new LinkedHashMap<String, List<String>>();
-        // unlockDecisionOutputs: decisionName → (portName → [zoneName, ...]) 🔓 判断器解锁输出端口连接的区域
-        var unlockDecisionOutputs = new LinkedHashMap<String, Map<String, List<String>>>();
 
         for (var element : graph.graphModel.getGraphElementModels()) {
             if (element instanceof WireModel wire) {
@@ -315,23 +308,6 @@ public class CapturePointGraphScreen {
                 // 4. 区域→区域依赖: from=zone_out(O)  to=required_zone(I)
                 else if (hasOutputPort(fromNm, "zone_out") && hasInputPort(toNm, "required_zone")) {
                     wireBasedRequiredZone.put(toName, fromName);
-                }
-                // 5. 🔓 区域→区域解锁: from=unlock_out(O)  to=unlock_in(I)
-                else if (hasOutputPort(fromNm, "unlock_out") && hasInputPort(toNm, "unlock_in")) {
-                    wireBasedUnlockDeps.computeIfAbsent(toName, k -> new ArrayList<>()).add(fromName);
-                }
-                // 6. 🔓 区域→判断器(解锁信号): from=unlock_out(O)  to=unlock_target(I)
-                else if (hasOutputPort(fromNm, "unlock_out") && hasInputPort(toNm, "unlock_target")) {
-                    unlockDecisionInputs.computeIfAbsent(toName, k -> new ArrayList<>()).add(fromName);
-                }
-                // 7. 🔓 判断器(解锁信号)→区域解锁: from=unlock_true_out/unlock_false_out(O)  to=unlock_in(I)
-                else if (hasInputPort(toNm, "unlock_in") && hasOutputPort(fromNm, "unlock_true_out")) {
-                    unlockDecisionOutputs.computeIfAbsent(fromName, k -> new LinkedHashMap<>())
-                            .computeIfAbsent("unlock_true_out", k -> new ArrayList<>()).add(toName);
-                }
-                else if (hasInputPort(toNm, "unlock_in") && hasOutputPort(fromNm, "unlock_false_out")) {
-                    unlockDecisionOutputs.computeIfAbsent(fromName, k -> new LinkedHashMap<>())
-                            .computeIfAbsent("unlock_false_out", k -> new ArrayList<>()).add(toName);
                 }
             }
         }
@@ -496,94 +472,12 @@ public class CapturePointGraphScreen {
                 }
             }
 
-            // 🔓 解锁依赖：从 unlock_out → unlock_in 连线解析
-            var unlockDeps = wireBasedUnlockDeps.get(name);
-            var unlockDepList = unlockDeps != null ? unlockDeps : new ArrayList<String>();
-
             newZones.put(name, new CaptureManager.ZoneEntry(
-                    name, cpList, reqZone, zoneCaptured, null, unlockDepList));
+                    name, cpList, reqZone, zoneCaptured, null, new ArrayList<>()));
         }
 
-        // ---- Phase 6: 🔓 解锁信号条件路由（新版条件节点 + 旧版判断器兼容）----
-        var unlockDecisionRoutedDeps = new LinkedHashMap<String, List<String>>();
-
-        // 6a. 新版条件节点解锁路由（condition with zone_target）
-        for (var entry : conditionModels.entrySet()) {
-            String condName = entry.getKey();
-            var nm = entry.getValue();
-            String conditionTypeStr = getOptionString(nm, "condition_type");
-            String compareValue = getOptionString(nm, "compare_value");
-            var conditionType = CaptureConditionNode.ConditionType.fromId(conditionTypeStr);
-
-            // 获取连接到此条件节点的"解锁输入"区域
-            List<String> inputZones = unlockDecisionInputs.get(condName);
-            if (inputZones == null || inputZones.isEmpty()) continue;
-
-            for (String zoneName : inputZones) {
-                var zoneEntry = newZones.get(zoneName);
-                if (zoneEntry == null) continue;
-
-                boolean result = evaluateNewCondition(conditionType, compareValue, null, zoneEntry);
-                String outputPort = result ? "unlock_true_out" : "unlock_false_out";
-
-                // 查找条件节点的输出连线 → 下游区域
-                routeUnlockOutput(condName, outputPort, zoneName,
-                        unlockDecisionRoutedDeps, graph);
-            }
-        }
-
-        // 6b. 旧版判断器节点解锁路由（兼容）
-        for (var decisionEntry : oldDecisionModels.entrySet()) {
-            String decisionName = decisionEntry.getKey();
-            var nm = decisionEntry.getValue();
-
-            String condition = getOptionString(nm, "condition");
-            String targetTeam = getOptionString(nm, "target_team");
-
-            // 获取输入此判断器的区域列表（来自 unlock_out → unlock_target 连线）
-            List<String> inputZones = unlockDecisionInputs.get(decisionName);
-            if (inputZones == null || inputZones.isEmpty()) continue;
-
-            // 获取此判断器的解锁输出映射
-            Map<String, List<String>> outputs = unlockDecisionOutputs.get(decisionName);
-            if (outputs == null || outputs.isEmpty()) continue;
-
-            // 对每个输入区域执行条件判断
-            for (String zoneName : inputZones) {
-                var zoneEntry = newZones.get(zoneName);
-                if (zoneEntry == null) continue;
-
-                // 评估条件（基于区域的状态：captured / owner_team / not_captured）
-                boolean conditionMet = evaluateOldZoneCondition(condition, targetTeam, zoneEntry);
-
-                // 根据结果选择输出端口
-                String outputPort = conditionMet ? "unlock_true_out" : "unlock_false_out";
-                List<String> targetZones = outputs.get(outputPort);
-                if (targetZones == null || targetZones.isEmpty()) continue;
-
-                // 将区域名称添加到下游区域的 unlockDependencies
-                for (String targetZoneName : targetZones) {
-                    unlockDecisionRoutedDeps.computeIfAbsent(targetZoneName, k -> new ArrayList<>()).add(zoneName);
-                }
-            }
-        }
-
-        // 将判断器路由的解锁依赖合并到区域 entries 的 unlockDependencies 中
-        for (var entry : unlockDecisionRoutedDeps.entrySet()) {
-            String zoneName = entry.getKey();
-            List<String> newUnlockDeps = entry.getValue();
-            var existing = newZones.get(zoneName);
-            if (existing != null) {
-                // 合并现有的直连接线解锁依赖 + 判断器路由的解锁依赖
-                var merged = new ArrayList<>(existing.unlockDependencies());
-                for (String dep : newUnlockDeps) {
-                    if (!merged.contains(dep)) {
-                        merged.add(dep);
-                    }
-                }
-                newZones.put(zoneName, existing.withUnlockDependencies(merged));
-            }
-        }
+        // 解锁依赖已经不再通过 save-time 连线解析管理，
+        // 完全由 CaptureActionNode 在运行时通过 CaptureManager API 控制。
 
         // 规则②：根据所有子据点的占领状态重新计算区域 captured
         for (var zoneName : List.copyOf(newZones.keySet())) {
@@ -822,35 +716,6 @@ public class CapturePointGraphScreen {
     }
 
     /**
-     * 跟踪条件节点的解锁输出到下游区域。
-     */
-    private static void routeUnlockOutput(String sourceNodeName, String sourceOutputPort,
-                                            String zoneName,
-                                            Map<String, List<String>> unlockDecisionRoutedDeps,
-                                            CapturePointGraph graph) {
-        for (var element : graph.graphModel.getGraphElementModels()) {
-            if (element instanceof WireModel wire) {
-                var fromPort = wire.getFromPort();
-                var toPort = wire.getToPort();
-                if (fromPort == null || toPort == null) continue;
-                var fromNode = fromPort.getNodeModel();
-                var toNode = toPort.getNodeModel();
-                if (!(fromNode instanceof NodeModel fromNm) || !(toNode instanceof NodeModel toNm)) continue;
-                String fromName = fromNm.getName();
-                String toName = toNm.getName();
-                if (fromName == null || toName == null) continue;
-
-                if (!fromName.equals(sourceNodeName)) continue;
-                String portName = fromPort.getUniqueName();
-                if (portName == null || !portName.equals(sourceOutputPort)) continue;
-
-                // 目标区域：添加解锁依赖
-                unlockDecisionRoutedDeps.computeIfAbsent(toName, k -> new ArrayList<>()).add(zoneName);
-            }
-        }
-    }
-
-    /**
      * 静态版本 getOptionString，用于 routeConditionOutput 中访问节点模型。
      */
     private static String getOptionStringStatic(NodeModel nm, String id) {
@@ -876,26 +741,6 @@ public class CapturePointGraphScreen {
         String val = getOptionStringStatic(nm, id);
         if (val == null || val.isEmpty()) return false;
         return "true".equalsIgnoreCase(val) || "1".equals(val);
-    }
-
-    /**
-     * 评估旧版 CaptureDecisionNode 对区域的条件（兼容旧数据）。
-     */
-    private static boolean evaluateOldZoneCondition(String condition, String targetTeam,
-                                                      CaptureManager.ZoneEntry zoneEntry) {
-        if (condition == null || condition.isEmpty()) condition = "captured";
-
-        return switch (condition) {
-            case "captured" -> zoneEntry.captured();
-            case "not_captured" -> !zoneEntry.captured();
-            case "owner_team" -> {
-                if (targetTeam == null || targetTeam.isEmpty()) yield false;
-                yield targetTeam.equals(zoneEntry.ownerTeam());
-            }
-            // capturing / not_capturing 对区域无效，默认走 false
-            case "capturing", "not_capturing" -> false;
-            default -> false;
-        };
     }
 
     /**
@@ -1170,31 +1015,6 @@ public class CapturePointGraphScreen {
                 } catch (Exception e) {
                     LOGGER.warn("Failed to create dependency wire from zone '{}' to zone '{}': {}",
                             zoneEntry.requiredZone(), zoneEntry.name(), e.getMessage());
-                }
-            }
-
-            // 🔓 建立解锁连线（unlock_out → unlock_in），独立于区域依赖
-            // 注意：由于判断器解锁信号路由在保存时已被编译解析为直接的 zone→zone
-            // 依赖（ZoneEntry.unlockDependencies），重新打开时只能恢复直接的
-            // unlock_out→unlock_in 连线。通过判断器的解锁路径需要在图中手动重新连线。
-            for (var zoneEntry : zones.values()) {
-                if (zoneEntry.unlockDependencies() == null || zoneEntry.unlockDependencies().isEmpty()) continue;
-                var zoneModel = zoneModels.get(zoneEntry.name());
-                if (zoneModel == null) continue;
-                var unlockInPort = zoneModel.getInputsById().get("unlock_in");
-                if (unlockInPort == null) continue;
-
-                for (var depName : zoneEntry.unlockDependencies()) {
-                    var depZoneModel = zoneModels.get(depName);
-                    if (depZoneModel == null) continue;
-                    var unlockOutPort = depZoneModel.getOutputsById().get("unlock_out");
-                    if (unlockOutPort == null) continue;
-                    try {
-                        graph.graphModel.createWire(unlockOutPort, unlockInPort);
-                    } catch (Exception e) {
-                        LOGGER.warn("Failed to create unlock wire from zone '{}' to zone '{}': {}",
-                                depName, zoneEntry.name(), e.getMessage());
-                    }
                 }
             }
 

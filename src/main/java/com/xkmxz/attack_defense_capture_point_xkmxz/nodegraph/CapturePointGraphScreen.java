@@ -927,21 +927,7 @@ public class CapturePointGraphScreen {
                     if (pos != null) {
                         layouts.put(name, new CaptureManager.NodeLayout(pos.x(), pos.y()));
                     }
-                    // 判断器节点额外保存 options
-                    // 注意：nm 是 CustomNodeModelImpl（或子类），需要用 ICustomNodeModel.getNode() 获取原始 Node
-                    if (nm instanceof ICustomNodeModel customNodeModel) {
-                        Node originalNode = customNodeModel.getNode();
-                        if (originalNode instanceof CaptureDecisionNode) {
-                            String condition = readOptionString(nm, "condition");
-                            String targetTeam = readOptionString(nm, "target_team");
-                            int progress = readOptionInt(nm, "progress_threshold");
-                            decisions.put(name, new CaptureManager.DecisionNodeData(
-                                    name, pos != null ? pos.x() : 0, pos != null ? pos.y() : 0,
-                                    condition != null ? condition : "captured",
-                                    targetTeam, progress));
-                        }
-                        // 新版节点：条件/逻辑门/动作/常量 — 布局已由 layouts 保存
-                    }
+                    // 判断器节点额外保存 options（旧版兼容，但已无 CaptureDecisionNode）
                 }
             }
 
@@ -1147,22 +1133,6 @@ public class CapturePointGraphScreen {
                 zoneIdx++;
             }
 
-            // 创建判断器节点（从保存的数据恢复）
-            var savedDecisions = mgr.getDecisionNodes();
-            if (!savedDecisions.isEmpty()) {
-                for (var entry : savedDecisions.entrySet()) {
-                    var data = entry.getValue();
-                    var node = new CaptureDecisionNode();
-                    var nodeModel = graph.graphModel.createNodeModel(node,
-                            new org.joml.Vector2f(data.x(), data.y()));
-                    nodeModel.setName(data.name());
-                    nodeModel.setTitle(Component.literal(data.name()));
-                    setOptionValue(nodeModel, "condition", ConditionMode.fromId(data.condition()));
-                    setOptionValue(nodeModel, "target_team", data.targetTeam() != null ? data.targetTeam() : "");
-                    setOptionValue(nodeModel, "progress_threshold", data.progressThreshold());
-                }
-            }
-
             // 建立连线
             for (var zoneEntry : zones.values()) {
                 var zoneModel = zoneModels.get(zoneEntry.name());
@@ -1275,13 +1245,8 @@ public class CapturePointGraphScreen {
                                 nm.setTitle(Component.literal(name));
                             }
                         } else if (hasInputPort(nm, "target")) {
-                            // 判断器节点：显示名称 + 条件类型（i18n）
-                            String conditionStr = getOptionString(nm, "condition");
-                            if (conditionStr == null || conditionStr.isEmpty()) conditionStr = "captured";
-                            var cond = ConditionMode.fromId(conditionStr);
-                            nm.setTitle(Component.literal(name + " [? ")
-                                    .append(cond.getDisplayName())
-                                    .append(Component.literal("]")));
+                            // 旧版判断器节点（兼容）：显示名称
+                            nm.setTitle(Component.literal(name + " [旧判断器]"));
                         } else if (hasInputPort(nm, "point_target") || hasInputPort(nm, "zone_target")) {
                             // 条件节点
                             String condType = getOptionString(nm, "condition_type");

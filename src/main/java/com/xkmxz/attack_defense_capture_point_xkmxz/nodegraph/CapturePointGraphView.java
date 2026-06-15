@@ -20,7 +20,6 @@ import java.util.stream.Stream;
  */
 public class CapturePointGraphView extends GraphView {
 
-    private int pendingViewportResetTicks;
     private Level level;
     private ToastLayer toastLayer;
     private Runnable refreshCallback;
@@ -96,7 +95,6 @@ public class CapturePointGraphView extends GraphView {
     public CapturePointGraphView loadGraph(Graph graph) {
         super.loadGraph(graph);
         suppressDefaultItemLibrary();
-        pendingViewportResetTicks = 1;
         return this;
     }
 
@@ -109,15 +107,6 @@ public class CapturePointGraphView extends GraphView {
         // 驱动通知气泡动画
         if (toastLayer != null) {
             toastLayer.tick();
-        }
-
-        if (pendingViewportResetTicks > 0) {
-            if (graphView.getContentWidth() > 0 && graphView.getContentHeight() > 0) {
-                pendingViewportResetTicks--;
-                if (pendingViewportResetTicks == 0) {
-                    resetViewportTransform();
-                }
-            }
         }
 
         // 每15 tick（约0.75秒）刷新一次节点标题，显示实时数据
@@ -133,10 +122,6 @@ public class CapturePointGraphView extends GraphView {
             itemLibrary.hide();
         }
         suppressDefaultItemLibrary();
-    }
-
-    private void resetViewportTransform() {
-        graphView.fit(0, 0, graphView.getContentWidth(), graphView.getContentHeight(), 1f);
     }
 
     // ---- 右键菜单 ----
@@ -188,7 +173,7 @@ public class CapturePointGraphView extends GraphView {
                 () -> createCustomNode(screenX, screenY, new ConstantNode(),
                         "const_", "node.constant.display_name"));
 
-        // 如果有选中的连线，添加\"删除连线\"操作（直接删除，无需确认对话框）
+        // 如果有选中的连线，添加"删除连线"操作（直接删除，无需确认对话框）
         boolean hasWireSelected = getSelected().stream().anyMatch(m -> m instanceof WireModel);
         if (hasWireSelected) {
             menu.leaf(
@@ -274,7 +259,7 @@ public class CapturePointGraphView extends GraphView {
     }
 
     /**
-     * 通用方法：在指定位置创建自定义节点模型。
+     * 通用方法：在右键点击位置创建自定义节点模型。
      */
     private void createCustomNode(float screenX, float screenY,
                                    com.lowdragmc.lowdraglib2.nodegraphtookit.api.node.Node node,

@@ -312,19 +312,19 @@ public class Attack_defense_capture_point_xkmxz {
                         continue;
                     }
 
-                    // Case B: 中立但有上一任占领者 → 由上一任占领者回收
+                    // Case B: 中立但有上一任占领者 → 由上一任占领者回收（满进度恢复）
                     if (entry.ownerTeam() == null && entry.lastOwnerTeam() != null) {
                         String reclaimTeam = entry.lastOwnerTeam();
                         access.setPointLastOwnerTeam(name, null);
                         access.setPointOwnerTeam(name, reclaimTeam);
-                        access.setPointCaptureProgress(name, 1);
+                        access.setPointCaptureProgress(name, CaptureManager.CapturePointEntry.MAX_PROGRESS);
                         continue;
                     }
 
-                    // Case C: 中立无上一任占领者，但有防守方 → 防守方回收
+                    // Case C: 中立无上一任占领者，但有防守方 → 防守方回收（满进度恢复）
                     if (entry.ownerTeam() == null && defender != null) {
                         access.setPointOwnerTeam(name, defender);
-                        access.setPointCaptureProgress(name, 1);
+                        access.setPointCaptureProgress(name, CaptureManager.CapturePointEntry.MAX_PROGRESS);
                         continue;
                     }
 

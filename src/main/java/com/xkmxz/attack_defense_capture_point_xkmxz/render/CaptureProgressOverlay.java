@@ -95,6 +95,9 @@ public class CaptureProgressOverlay {
         boolean isNeutralizing = !captured && data.ownerTeam() != null && data.capturingTeam() != null
                 && !data.ownerTeam().equals(data.capturingTeam());
 
+        // 检测是否处于恢复阶段（ownerTeam 存在，captured=false，无人在占领中）
+        boolean isRecovering = !captured && data.ownerTeam() != null && data.capturingTeam() == null;
+
         if (captured && isPlayerTeam) {
             // 已被我方占领 → 绿色满条
             bgTexture = GREEN_BG;
@@ -118,6 +121,19 @@ public class CaptureProgressOverlay {
                 bgTexture = RED_BG;
                 fgTexture = RED;
                 statusText = "⟳ " + nearest.getKey() + " (敌方清除中 " + data.captureProgress() + "%)";
+            }
+            progressWidth = (int) ((double) data.captureProgress() / 100.0 * BAR_WIDTH);
+        } else if (isRecovering) {
+            // 正在恢复中（进度缓慢回升到 100，无人争夺）
+            boolean isOurTeam = player.getTeam() != null && player.getTeam().getName().equals(data.ownerTeam());
+            if (isOurTeam) {
+                bgTexture = GREEN_BG;
+                fgTexture = GREEN;
+                statusText = "↺ " + nearest.getKey() + " (恢复中 " + data.captureProgress() + "%)";
+            } else {
+                bgTexture = RED_BG;
+                fgTexture = RED;
+                statusText = "↺ " + nearest.getKey() + " (敌方恢复中 " + data.captureProgress() + "%)";
             }
             progressWidth = (int) ((double) data.captureProgress() / 100.0 * BAR_WIDTH);
         } else if (data.capturingTeam() != null) {

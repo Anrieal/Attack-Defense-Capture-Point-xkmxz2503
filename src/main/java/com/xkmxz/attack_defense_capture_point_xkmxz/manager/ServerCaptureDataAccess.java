@@ -145,6 +145,17 @@ public class ServerCaptureDataAccess implements ICaptureDataAccess {
     // ================================================================
 
     @Override
+    @Nullable
+    public String getDefenderTeam() {
+        return manager.getDefenderTeam();
+    }
+
+    @Override
+    public void setDefenderTeam(@Nullable String team) {
+        manager.setDefenderTeam(team);
+    }
+
+    @Override
     public long getVersion() {
         return manager.getVersion();
     }

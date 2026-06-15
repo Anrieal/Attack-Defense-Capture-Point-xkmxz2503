@@ -8,6 +8,7 @@ import com.mojang.brigadier.arguments.StringArgumentType;
 import com.mojang.brigadier.context.CommandContext;
 import com.mojang.brigadier.suggestion.Suggestions;
 import com.mojang.brigadier.suggestion.SuggestionsBuilder;
+import com.xkmxz.attack_defense_capture_point_xkmxz.block.entity.CapturePointBlockEntity;
 import com.xkmxz.attack_defense_capture_point_xkmxz.manager.ICaptureDataAccess;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.commands.Commands;
@@ -130,6 +131,16 @@ public class ModCommands {
                 .then(Commands.literal("relationships")
                         .executes(ModCommands::showRelationships))
 
+                // ---- Defender (攻防模式) ----
+                .then(Commands.literal("defender")
+                        .then(Commands.literal("set")
+                                .then(Commands.argument("team", StringArgumentType.string())
+                                        .executes(ModCommands::setDefender)))
+                        .then(Commands.literal("clear")
+                                .executes(ModCommands::clearDefender))
+                        .then(Commands.literal("status")
+                                .executes(ModCommands::defenderStatus)))
+
                 // ---- Editor save (server-side stub; actual save uses direct API in singleplayer or custom packet) ----
                 .then(Commands.literal("savegraph")
                         .executes(ModCommands::saveGraph))
@@ -157,6 +168,9 @@ public class ModCommands {
         source.sendSuccess(() -> Component.translatable("command.capturepoint.help.setcolor"), false);
         source.sendSuccess(() -> Component.translatable("command.capturepoint.help.settoggle"), false);
         source.sendSuccess(() -> Component.translatable("command.capturepoint.help.zone_setrequired"), false);
+        source.sendSuccess(() -> Component.translatable("command.capturepoint.help.defender_set"), false);
+        source.sendSuccess(() -> Component.translatable("command.capturepoint.help.defender_clear"), false);
+        source.sendSuccess(() -> Component.translatable("command.capturepoint.help.defender_status"), false);
         source.sendSuccess(() -> Component.translatable("command.capturepoint.help.relationships"), false);
         source.sendSuccess(() -> Component.translatable("command.capturepoint.help.savegraph"), false);
         return 1;
@@ -294,6 +308,39 @@ public class ModCommands {
         // 同步客户端缓存和方块实体
         com.xkmxz.attack_defense_capture_point_xkmxz.block.entity.CapturePointBlockEntity.syncAllBoundBlocks((ServerLevel) level);
         source.sendSuccess(() -> Component.translatable("command.capturepoint.zone.setcaptured.success", zoneName, captured), true);
+        return 1;
+    }
+
+    private static int setDefender(CommandContext<CommandSourceStack> ctx) {
+        var source = ctx.getSource();
+        var team = StringArgumentType.getString(ctx, "team");
+        var level = source.getLevel();
+        var manager = ICaptureDataAccess.server(level);
+        manager.setDefenderTeam(team);
+        CapturePointBlockEntity.syncAllBoundBlocks((ServerLevel) level);
+        source.sendSuccess(() -> Component.translatable("command.capturepoint.defender.set.success", team), true);
+        return 1;
+    }
+
+    private static int clearDefender(CommandContext<CommandSourceStack> ctx) {
+        var source = ctx.getSource();
+        var level = source.getLevel();
+        var manager = ICaptureDataAccess.server(level);
+        manager.setDefenderTeam(null);
+        CapturePointBlockEntity.syncAllBoundBlocks((ServerLevel) level);
+        source.sendSuccess(() -> Component.translatable("command.capturepoint.defender.clear.success"), true);
+        return 1;
+    }
+
+    private static int defenderStatus(CommandContext<CommandSourceStack> ctx) {
+        var source = ctx.getSource();
+        var manager = ICaptureDataAccess.server(source.getLevel());
+        String defender = manager.getDefenderTeam();
+        if (defender != null) {
+            source.sendSuccess(() -> Component.translatable("command.capturepoint.defender.status.active", defender), false);
+        } else {
+            source.sendSuccess(() -> Component.translatable("command.capturepoint.defender.status.inactive"), false);
+        }
         return 1;
     }
 

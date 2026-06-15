@@ -169,6 +169,7 @@ public class Attack_defense_capture_point_xkmxz {
 
         private static void processCaptureLogic(net.minecraft.server.level.ServerLevel level) {
             var access = ICaptureDataAccess.server(level);
+            String defender = access.getDefenderTeam();
             for (var entry : access.getPoints().values()) {
                 if (!entry.showRange()) continue;
                 var pos = entry.pos();
@@ -185,10 +186,11 @@ public class Attack_defense_capture_point_xkmxz {
                     continue;
                 }
 
-                // 统计各队伍人数
+                // 统计各队伍人数（防守方不计入）
                 var teamCount = new java.util.HashMap<String, Integer>();
                 for (var p : nearbyPlayers) {
                     String t = p.getTeam() != null ? p.getTeam().getName() : "__no_team__";
+                    if (defender != null && defender.equals(t)) continue;
                     teamCount.merge(t, 1, Integer::sum);
                 }
 
@@ -201,6 +203,17 @@ public class Attack_defense_capture_point_xkmxz {
                         .max(java.util.Comparator.comparingInt(java.util.Map.Entry::getValue))
                         .get();
                 String dominantTeam = maxEntry.getKey();
+
+                // 防守方模式下检查区域可达性（逐层占领）
+                if (defender != null) {
+                    String zoneName = access.findZoneForPoint(entry.name());
+                    if (zoneName != null && !access.canAccessZone(zoneName)) {
+                        if (entry.capturingTeam() != null) {
+                            access.setPointCapturingTeam(entry.name(), null);
+                        }
+                        continue;
+                    }
+                }
 
                 // 如果已被此队伍占领，保持满进度
                 if (java.util.Objects.equals(entry.ownerTeam(), dominantTeam)) {

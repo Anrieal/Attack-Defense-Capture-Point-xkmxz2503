@@ -19,7 +19,10 @@
   "command.capturepoint.help.setcolor": "/capturepoint setcolor <name> <color> - Set point display color",
   "command.capturepoint.help.settoggle": "/capturepoint settoggle <name> <true/false> - Toggle range display",
   "command.capturepoint.help.zone_setrequired": "/capturepoint zone setrequired <zone> [requiredZone|clear] - Set/clear zone dependency",
-  "command.capturepoint.help.zone_setcaptured": "/capturepoint zone setcaptured <zone> <true/false> - Set zone captured status (syncs to all child points)",
+  "command.capturepoint.help.zone_setcaptured": "/capturepoint zone setcaptured <zone> <true/false> - Set zone captured status (syncs to child points)",
+  "command.capturepoint.help.defender_set": "/capturepoint defender set <team> - Set defender team (attack/defense mode)",
+  "command.capturepoint.help.defender_clear": "/capturepoint defender clear - Clear defender team (free capture mode)",
+  "command.capturepoint.help.defender_status": "/capturepoint defender status - Show current defender team",
   "command.capturepoint.help.relationships": "/capturepoint relationships - Show all point/zone relationships",
   "command.capturepoint.help.savegraph": "/capturepoint savegraph - Save graph data from editor (singleplayer: use GUI Save button)",
 
@@ -66,6 +69,11 @@
   "command.capturepoint.zone.setrequired.success": "Set required zone of '%s' to '%s'",
   "command.capturepoint.zone.setrequired.clear": "Cleared required zone of '%s'",
   "command.capturepoint.zone.setcaptured.success": "Set captured status of zone '%s' to %s",
+
+  "command.capturepoint.defender.set.success": "Set defender team to '%s', all points initialized as captured by this team",
+  "command.capturepoint.defender.clear.success": "Cleared defender team, switched to free capture mode",
+  "command.capturepoint.defender.status.active": "Current defender team: %s (attackers must capture zones layer by layer)",
+  "command.capturepoint.defender.status.inactive": "No defender team set (free capture mode)",
 
   "command.capturepoint.savegraph.hint": "Use GUI Save button in singleplayer or use custom packet in dedicated server.",
 

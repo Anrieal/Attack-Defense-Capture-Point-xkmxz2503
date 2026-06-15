@@ -25,6 +25,8 @@ public class CaptureManager extends SavedData {
     private final Map<String, CapturePointEntry> points = new LinkedHashMap<>();
     private final Map<String, ZoneEntry> zones = new LinkedHashMap<>();
     private long version = 0; // 数据版本号，每次写入递增，用于 GUI 检测外部修改
+    @Nullable
+    private String defenderTeam = null; // 默认防守方队伍，不为 null 时所有据点初始归此队伍
 
     // ---- Data Records ----
 
@@ -383,6 +385,35 @@ public class CaptureManager extends SavedData {
         return isZoneCaptured(zone.requiredZone());
     }
 
+    // ---- Defender Team (攻防模式) ----
+
+    /** 获取当前防守方队伍。null 表示无防守方（自由占领模式）。 */
+    @Nullable
+    public String getDefenderTeam() {
+        return defenderTeam;
+    }
+
+    /** 设置防守方队伍，并将所有据点和区域初始化为该队伍占领。null 表示清除防守方。 */
+    public void setDefenderTeam(@Nullable String team) {
+        this.defenderTeam = team;
+        if (team != null) {
+            // 将所有据点设为防守队伍占领
+            for (var entry : List.copyOf(points.entrySet())) {
+                var name = entry.getKey();
+                var point = entry.getValue();
+                points.put(name, point.withOwnerTeam(team));
+            }
+            // 将所有区域设为已占领
+            for (var entry : List.copyOf(zones.entrySet())) {
+                var name = entry.getKey();
+                var zone = entry.getValue();
+                zones.put(name, zone.withCaptured(true));
+            }
+        }
+        bumpVersion();
+        LOGGER.info("Defender team set to: {}", team);
+    }
+
     // ---- Persistence ----
 
     @Override
@@ -400,6 +431,7 @@ public class CaptureManager extends SavedData {
         tag.put("zones", zonesList);
 
         tag.putLong(TAG_VERSION, version);
+        if (defenderTeam != null) tag.putString("defenderTeam", defenderTeam);
 
         return tag;
     }
@@ -407,6 +439,7 @@ public class CaptureManager extends SavedData {
     private void load(CompoundTag tag, HolderLookup.Provider registries) {
         points.clear();
         zones.clear();
+        defenderTeam = null;
 
         var pointsList = tag.getList("points", Tag.TAG_COMPOUND);
         for (int i = 0; i < pointsList.size(); i++) {
@@ -421,7 +454,8 @@ public class CaptureManager extends SavedData {
         }
 
         version = tag.contains(TAG_VERSION, Tag.TAG_LONG) ? tag.getLong(TAG_VERSION) : 0;
+        if (tag.contains("defenderTeam")) defenderTeam = tag.getString("defenderTeam");
 
-        LOGGER.info("Loaded {} capture points, {} zones (version {})", points.size(), zones.size(), version);
+        LOGGER.info("Loaded {} capture points, {} zones (version {}), defender={}", points.size(), zones.size(), version, defenderTeam);
     }
 }

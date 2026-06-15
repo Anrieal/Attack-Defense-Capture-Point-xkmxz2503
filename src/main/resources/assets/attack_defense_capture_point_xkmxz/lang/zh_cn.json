@@ -20,6 +20,9 @@
   "command.capturepoint.help.settoggle": "/capturepoint settoggle <名称> <true/false> - 切换范围显示",
   "command.capturepoint.help.zone_setrequired": "/capturepoint zone setrequired <区域> [依赖区域|clear] - 设置/清除区域依赖",
   "command.capturepoint.help.zone_setcaptured": "/capturepoint zone setcaptured <区域> <true/false> - 设置区域占领状态（同步到所有子据点）",
+  "command.capturepoint.help.defender_set": "/capturepoint defender set <队伍名> - 设置防守方队伍（攻防模式）",
+  "command.capturepoint.help.defender_clear": "/capturepoint defender clear - 清除防守方队伍（自由占领模式）",
+  "command.capturepoint.help.defender_status": "/capturepoint defender status - 查看当前防守方队伍",
   "command.capturepoint.help.relationships": "/capturepoint relationships - 查看所有据点和区域的关系",
   "command.capturepoint.help.savegraph": "/capturepoint savegraph - 从编辑器保存图数据（单机请使用GUI保存按钮）",
 
@@ -66,6 +69,11 @@
   "command.capturepoint.zone.setrequired.success": "已将区域 '%s' 的依赖区域设为 '%s'",
   "command.capturepoint.zone.setrequired.clear": "已清除区域 '%s' 的依赖区域",
   "command.capturepoint.zone.setcaptured.success": "已将区域 '%s' 的占领状态设为 %s",
+
+  "command.capturepoint.defender.set.success": "已将防守方队伍设为 '%s'，所有据点已初始化为此队伍占领",
+  "command.capturepoint.defender.clear.success": "已清除防守方队伍，切换为自由占领模式",
+  "command.capturepoint.defender.status.active": "当前防守方队伍: %s（进攻方需逐层占领）",
+  "command.capturepoint.defender.status.inactive": "当前无防守方队伍（自由占领模式）",
 
   "command.capturepoint.savegraph.hint": "单机请使用GUI保存按钮，专用服务器需通过自定义网络包实现。",
 

@@ -144,6 +144,12 @@ public interface ICaptureDataAccess {
     //  批量操作 & 版本控制
     // ================================================================
 
+    /** 获取当前防守方队伍。null 表示无防守方（自由占领模式）。 */
+    @Nullable String getDefenderTeam();
+
+    /** 设置防守方队伍，并将所有据点和区域初始化为该队伍占领。null 表示清除防守方。 */
+    void setDefenderTeam(@Nullable String team);
+
     /** 获取当前数据版本号，用于 GUI 冲突检测 */
     long getVersion();
 
